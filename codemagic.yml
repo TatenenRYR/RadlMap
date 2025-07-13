@@ -1,0 +1,14 @@
+workflows:
+  build-eierhuette:
+    name: Build RadlApp
+    max_build_duration: 15
+    environment:
+      vars:
+        CORDOVA_PLATFORM: "android"
+      node: 16
+    scripts:
+      - npm install -g cordova
+      - cordova platform add android
+      - cordova build android
+    artifacts:
+      - platforms/android/app/build/outputs/**/*.apk
