@@ -1,1 +1,1394 @@
-<!DOCTYPE html><html><head><title>Eierhütte</title></head><body><h1>Eierhütten App</h1></body></html>
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RadlMap Navigation</title>
+
+  <!-- Leaflet & MarkerCluster CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+  <style>
+    
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: sans-serif;
+      overscroll-behavior: none;
+    }
+
+    #map {
+      position: absolute;
+      top: 0; bottom: 0; left: 0; right: 0;
+    }
+
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      font-size: 1.2em;
+    }
+
+/* 🚴 Fingerfreundlich: Buttons */
+#toolbar button,
+#dashboard button {
+  min-width: 56px;
+  min-height: 56px;
+  font-size: 20px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: #333;
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: background 0.2s;
+}
+
+#toolbar button:hover,
+#dashboard button:hover {
+  background: #555;
+}
+
+/* 🚴 Fingerfreundlich: Inputs */
+#dashboard input {
+  font-size: 18px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #aaa;
+  margin-bottom: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 🚴 Toolbar größer und abgerundet */
+#toolbar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  background: #fff;
+  padding: 12px 16px;
+  border-radius: 16px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  z-index: 1000;
+}
+
+/* 🚴 Liste: große klickbare Bereiche */
+#selectedList li {
+  background: var(--accent-bg);
+  color: var(--fg-color);
+  font-size: 18px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+   #toolbar button, #toolbar input {
+      min-width: 48px;
+      min-height: 48px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+   }
+    #toggleDashboardBtn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1002;
+  background: #333;
+  color: white;
+  border: none;
+  font-size: 26px;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+/* Zustand wenn Dashboard versteckt ist */
+#dashboard.hidden {
+  display: none;
+}
+    #dashboardAlert {
+  color: red;
+  font-size: 20px;
+  position: absolute;
+  top: 4px;
+  right: 6px;
+    }
+    #dashboard {
+  position: fixed;
+  top: 60px;
+  right: 10px;
+  width: 260px;
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: 12px;
+  z-index: 1001;
+  font-size: 14px;
+  border-radius: 12px;
+  max-height: 70vh; /* Wichtig! */
+  overflow-y: auto;
+}
+
+#selectedList {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+    #toast {
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 8px;
+      display: none;
+      z-index: 1002;
+    }
+
+    #debug {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      background: black;
+      color: lime;
+      padding: 6px;
+      font-family: monospace;
+      font-size: 12px;
+      border-radius: 6px;
+      z-index: 1002;
+      max-height: 120px;
+      overflow: auto;
+    }
+
+    #routeInfo {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #333;
+      color: white;
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 1001;
+      display: none;
+    }
+
+    #compass {
+  position: fixed;
+  top: 20px;
+  left: 70px; /* vorher: 20px */
+  width: 50px;
+  height: 50px;
+  background: #fff;
+  border-radius: 50%;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
+/* 🌞 Lightmode (Default, optional für Klarheit) */
+body.light-mode {
+  --bg-color: #ffffff;
+  --fg-color: #222222;
+  --accent-bg: #f9f9f9;
+  --btn-bg: #333333;
+  --btn-fg: #ffffff;
+  --input-bg: #ffffff;
+  --input-fg: #000000;
+  --border-color: #ccc;
+}
+
+/* 🌙 Darkmode */
+body.dark-mode {
+  --bg-color: #121212;
+  --fg-color: #f0f0f0;
+  --accent-bg: #1f1f1f;
+  --btn-bg: #eeeeee;
+  --btn-fg: #1b1b1b;
+  --input-bg: #2a2a2a;
+  --input-fg: #ffffff;
+  --border-color: #444;
+}
+
+/* 🌐 Anwenden der Farben */
+body {
+  background: var(--bg-color);
+  color: var(--fg-color);
+  transition: background 0.3s, color 0.3s;
+}
+
+/* ✨ UI Container */
+#dashboard,
+#toolbar,
+#toast,
+#debug,
+#routeInfo,
+#compass {
+  background: var(--accent-bg);
+  color: var(--fg-color);
+  transition: background 0.3s, color 0.3s;
+}
+
+/* 🖱️ Buttons */
+#toolbar button,
+#dashboard button,
+#toggleDashboardBtn {
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  transition: background 0.3s, color 0.3s;
+}
+
+/* ✏️ Eingaben */
+#dashboard input {
+  background: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--border-color);
+  transition: background 0.3s, color 0.3s;
+}
+
+/* 📍 Marker-Cluster im Darkmode */
+body.dark-mode .leaflet-marker-icon.marker-cluster-small,
+body.dark-mode .leaflet-marker-icon.marker-cluster-medium,
+body.dark-mode .leaflet-marker-icon.marker-cluster-large {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: black;
+  border: 2px solid #333;
+}
+
+body.dark-mode .leaflet-marker-icon.marker-cluster div {
+  background: none !important;
+}
+
+/* 💬 Leaflet-Popups */
+body.dark-mode .leaflet-popup-content-wrapper,
+body.dark-mode .leaflet-popup-tip {
+  background: var(--accent-bg) !important;
+  color: var(--fg-color) !important;
+  border: 1px solid var(--border-color);
+}
+
+body.dark-mode .leaflet-popup-content {
+  color: var(--fg-color) !important;
+}
+
+  </style>
+</head>
+<body>
+  <!-- 🔝 Navigationsbanner -->
+<div id="navBanner" style="
+  display:none; position:fixed; top:0; left:0; right:0;
+  z-index:1002; background:#222; color:#fff;
+  padding:14px 20px; font-size:18px;
+  display:flex; justify-content:space-between; align-items:center;">
+  <span id="navInstruction">🚴 Navigation aktiv</span>
+  <span id="navDistance">0 m</span>
+</div>
+  <!-- Loader & Kartencontainer -->
+  <div id="loader">⏳ Lade Karte…</div>
+  <div id="map"></div>
+  <div id="compass">🧭</div>
+  <button id="toggleDashboardBtn" onclick="toggleDashboard()">
+  ☰ <span id="dashboardAlert" style="display: none;">❗</span>
+  </button>  <div id="routeInfo">0 km · 0 Min · -</div>
+
+  <!-- Dashboard mit Benutzer-, Gruppen- und Routendaten -->
+  <div id="dashboard" class="hidden">
+    <b>📋 Ausgewählt:</b>
+    <ul id="selectedList" ondrop="drop(event)" ondragover="allowDrop(event)"></ul>
+    <button onclick="skipHut()">⏭️ Nächste überspringen</button>
+    <hr/>
+    <button onclick="sendSOS()">❗ SOS senden</button>
+    <hr/>
+    <div id="nameBlock">
+       <span id="userNameText" onclick="editName()" style="cursor:pointer;">👤 Nutzername</span>
+       <input id="usernameInput" type="text" style="display:none;" />
+       <button onclick="saveUsername()" id="saveNameBtn" style="display:none;">💾</button>
+    </div>
+    <div id="roomToggle">
+        <button onclick="toggleRoom()">👥 Raum beitreten</button>
+        <div id="roomBox" style="display:none;">
+       <input id="roomId" placeholder="Raum-ID" />
+       <button onclick="joinRoom()">➡️</button>
+   </div>
+      <label>🗣️ Sprache:
+  <select id="voiceLang" onchange="localStorage.lang = this.value" style="margin-top:4px;">
+    <option value="de-DE">🇩🇪 Deutsch</option>
+    <option value="de-AT">🇦🇹 Österreich</option>
+    <option value="de-CH">🇨🇭 Schweiz</option>
+    <option value="nl-NL">🇳🇱 Niederländisch</option>
+  </select>
+      </label>
+    
+    </div>
+  </div>
+
+  <!-- Toast & Debug-Feld -->
+  <div id="toast"></div>
+  <div id="debug"></div>
+
+  <!-- Toolbar mit Routensteuerung -->
+  <div id="toolbar">
+    <button onclick="toggleFollow()">📍</button>
+    <button onclick="toggleVoice()">🔊</button>
+    <button id="startBtn" onclick="startRoute()">▶️ Start</button>
+    <button id="stopBtn" onclick="stopNavigation()" style="display:none;">🛑 Stop</button>
+    <button onclick="resetRoute()">🗑️ Reset</button>
+    <button id="toggleThemeBtn" onclick="toggleMapTheme()">🌙</button>
+  </div>
+
+  <!-- Scripte: Leaflet, MarkerCluster, Firebase, Turf -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://unpkg.com/@turf/turf@6.5.0/turf.min.js"></script>
+
+  <!-- Beginn des JavaScript-Codes -->
+  <script>
+    /////////////////////////////////////////
+    // NAVIGATION: Funktionsübersicht
+    /////////////////////////////////////////
+    // - 🔥 Firebase Setup
+    // - 🌍 Karten & Marker Globals
+    // - 🧩 Hilfsfunktionen
+    // - 👤 Benutzerfunktionen
+    // - 👥 Gruppenfunktionen
+    // - 🚨 Sicherheitsfunktionen
+    // - 🧭 Routingfunktionen
+    // - 📋 Auswahlliste
+    // - 🚀 Initialisierung
+    /////////////////////////////////////////
+    // 🔥 Firebase Setup
+    /////////////////////////////////////////
+    const firebaseConfig = {
+      apiKey: "5b3ce3597851110001cf624866907189b4974b88e5541b15dfed2e1603067f5b85cd6da44c68ee87",
+      authDomain: "eierhuettentour.firebaseapp.com",
+      projectId: "eierhuettentour"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    /////////////////////////////////////////
+    // 🌍 Karten & Marker Globals
+    /////////////////////////////////////////
+    let map, userMarker;
+    let follow = true;
+    let voice = true;
+    let cluster = L.markerClusterGroup();
+    let huts = [], selected = [];
+    let routingLine, progressLine, navInterval;
+    let groupMarkers = {};
+    let roomId = "default";
+    let alias = "User" + Math.floor(Math.random() * 1000);
+    let tourStartTime, tourDistance = 0, challengeProgress = 0;
+    let compassRotation = 0;
+    let orientationListenerActive = false;
+    let currentTileLayer;
+    let isDarkTheme = false;
+
+   /////////////////////////////////////////
+   // 🧩 UI Funktion
+   /////////////////////////////////////////
+function speakNextInstruction(name, dist) {
+  if (!voice || !name || dist == null) return;
+
+  let msg = "";
+  if (dist < 50) {
+    msg = `Jetzt ${name}.`;
+  } else if (dist < 200) {
+    msg = `In ${Math.round(dist)} Metern erreichst du ${name}.`;
+  } else {
+    msg = `${name} in ${(dist / 1000).toFixed(1)} Kilometern.`;
+  }
+
+  const utter = new SpeechSynthesisUtterance(msg);
+  utter.lang = localStorage.lang || navigator.language || "de-DE";
+  speechSynthesis.cancel();
+  speechSynthesis.speak(utter);
+}
+
+  function toggleDashboard() {
+     const dash = document.getElementById("dashboard");
+     const btn = document.getElementById("toggleDashboardBtn");
+
+     dash.classList.toggle("hidden");
+     const visible = !dash.classList.contains("hidden");
+
+     btn.textContent = visible ? "✖" : "☰";
+    }
+    function showDashboardAlert() {
+  const badge = document.getElementById("dashboardAlert");
+  if (badge) badge.style.display = "inline";
+}
+
+function clearDashboardAlert() {
+  const badge = document.getElementById("dashboardAlert");
+  if (badge) badge.style.display = "none";
+}
+    function toggleDashboard() {
+  const dash = document.getElementById("dashboard");
+  const btn = document.getElementById("toggleDashboardBtn");
+
+  dash.classList.toggle("hidden");
+  const visible = !dash.classList.contains("hidden");
+
+  btn.textContent = visible ? "✖" : "☰";
+  clearDashboardAlert(); // ← Badge zurücksetzen
+    }
+
+    
+function createTileLayer(dark = false) {
+  if (!map) return;
+
+  // Entferne alten TileLayer
+  if (currentTileLayer) {
+    map.removeLayer(currentTileLayer);
+  }
+
+  const tileUrl = dark
+    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+  const attrib = dark
+    ? '&copy; OpenStreetMap &copy; CARTO'
+    : '&copy; OpenStreetMap contributors';
+
+  currentTileLayer = L.tileLayer(tileUrl, {
+    attribution: attrib,
+     maxZoom: 19
+  });
+
+  currentTileLayer.addTo(map);
+
+  // 🟩 Stelle sicher, dass der MarkerCluster sichtbar bleibt
+  if (!map.hasLayer(cluster)) {
+    map.addLayer(cluster);
+  }
+  
+}
+
+function toggleMapTheme() {
+  isDarkTheme = !isDarkTheme;
+  createTileLayer(isDarkTheme);
+
+  const btn = document.getElementById("toggleThemeBtn");
+  if (btn) btn.textContent = isDarkTheme ? "☀️" : "🌙";
+
+  // 🌗 UI-Klasse setzen
+  document.body.classList.toggle("dark-mode", isDarkTheme);
+  document.body.classList.toggle("light-mode", !isDarkTheme);
+
+  localStorage.setItem("mapTheme", isDarkTheme ? "dark" : "light");
+}
+function clearRouteLines() {
+  if (routingLine && map.hasLayer(routingLine)) {
+    map.removeLayer(routingLine);
+    routingLine = null;
+  }
+  if (progressLine && map.hasLayer(progressLine)) {
+    map.removeLayer(progressLine);
+    progressLine = null;
+  }
+  map.eachLayer(function(layer) {
+  if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+    map.removeLayer(layer);
+  }
+});
+}
+
+    function rotateMap(event) {
+  if (!event.alpha) return;
+
+  const heading = 360 - event.alpha;
+  compassRotation = heading;
+
+  const compass = document.getElementById("compass");
+  if (compass) {
+    compass.style.transform = `rotate(${heading}deg)`;
+  }
+
+  const mapPane = document.querySelector(".leaflet-map-pane");
+  if (mapPane) {
+    mapPane.style.transformOrigin = "center center";
+    mapPane.style.transition = "transform 0.2s linear";
+    mapPane.style.transform = `rotate(${heading}deg)`;
+  }
+
+  // 🧭 Karte leicht verschieben (damit User weiter unten ist)
+  if (follow && userMarker && map) {
+    const ll = userMarker.getLatLng();
+    map.setView(ll, map.getZoom(), { animate: false });
+    map.panBy([0, 100], { animate: true }); // ← Pan nach unten (Y: 100px)
+  }
+    }
+    /////////////////////////////////////////
+    // 🧩 Hilfsfunktionen
+    /////////////////////////////////////////
+
+    // Zeigt eine Toast-Nachricht am unteren Bildschirmrand
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.innerText = msg;
+      t.style.display = "block";
+      setTimeout(() => t.style.display = "none", 3000);
+    }
+
+    // Debug-Ausgabe im unteren linken Fenster
+    function logDebug(msg) {
+      const d = document.getElementById("debug");
+      d.innerHTML += `[${new Date().toLocaleTimeString()}] ${msg}<br>`;
+      d.scrollTop = d.scrollHeight;
+    }
+
+    /////////////////////////////////////////
+    // 👤 Benutzerfunktionen
+    /////////////////////////////////////////
+
+    // Speichert den eingegebenen Namen lokal
+   /* function saveUsername() {
+      const n = document.getElementById("username").value.trim();
+      if (n) {
+        localStorage.username = n;
+        document.getElementById("userDisplay").innerText = "👤 " + n;
+        showToast("✔️ Name gespeichert");
+      }
+    }*/
+
+    // Zeigt gespeicherten Namen bei Start an
+    function initUsername() {
+      const n = localStorage.username;
+      if (n) {
+       // document.getElementById("userDisplay").innerText = "👤 " + n;
+        document.getElementById("userNameText").innerText = "👤 " + n;
+      }
+    }
+
+
+    function editName() {
+  const current = localStorage.username || alias;
+  document.getElementById("userNameText").style.display = "none";
+  document.getElementById("usernameInput").style.display = "inline-block";
+  document.getElementById("saveNameBtn").style.display = "inline-block";
+  document.getElementById("usernameInput").value = current;
+}
+
+function saveUsername() {
+  const n = document.getElementById("usernameInput").value.trim();
+  if (n) {
+    localStorage.username = n;
+    document.getElementById("userNameText").innerText = "👤 " + n;
+    showToast("✔️ Name gespeichert");
+  }
+  document.getElementById("userNameText").style.display = "inline-block";
+  document.getElementById("usernameInput").style.display = "none";
+  document.getElementById("saveNameBtn").style.display = "none";
+}
+    function disableCompassRotation() {
+  if (!orientationListenerActive) return;
+
+  orientationListenerActive = false;
+  window.removeEventListener("deviceorientation", rotateMap, true);
+
+  // Rückdrehung der Karte
+  const mapPane = document.querySelector(".leaflet-map-pane");
+  if (mapPane) {
+    mapPane.style.transform = "rotate(0deg)";
+  }
+
+  const compass = document.getElementById("compass");
+  if (compass) {
+    compass.style.transform = "rotate(0deg)";
+  }
+    }
+function enableCompassRotation() {
+  if (orientationListenerActive) return;
+
+  if (
+    typeof DeviceOrientationEvent !== "undefined" &&
+    typeof DeviceOrientationEvent.requestPermission === "function"
+  ) {
+    DeviceOrientationEvent.requestPermission().then(response => {
+      if (response === "granted") {
+        startCompassListener();
+      } else {
+        showToast("❌ Kompass-Zugriff verweigert");
+      }
+    }).catch(err => {
+      console.warn("❗ Kompass-Zugriff fehlgeschlagen:", err);
+      showToast("❗ Zugriff auf Kompass gescheitert");
+    });
+  } else {
+    startCompassListener();
+  }
+}
+
+function startCompassListener() {
+  if (orientationListenerActive) return;
+  orientationListenerActive = true;
+  window.addEventListener("deviceorientation", rotateMap, true);
+  console.log("🧭 Kompassrotation aktiviert");
+}
+
+    function rotateMap(event) {
+  if (!event.alpha) return;
+
+  const heading = 360 - event.alpha;
+  compassRotation = heading;
+
+  // Drehe Kompass-Icon
+  const compass = document.getElementById("compass");
+  if (compass) {
+    compass.style.transform = `rotate(${heading}deg)`;
+  }
+
+  // Drehe Leaflet-Karten-Pane
+  const mapPane = document.querySelector(".leaflet-map-pane");
+  if (mapPane) {
+    mapPane.style.transformOrigin = "center center";
+    mapPane.style.transition = "transform 0.2s linear";
+    mapPane.style.transform = `rotate(${heading}deg)`;
+  }
+}
+    /////////////////////////////////////////
+    // 👥 Gruppenfunktionen
+    /////////////////////////////////////////
+
+    // Tritt einem Raum bei
+    function joinRoom() {
+      const id = document.getElementById("roomId").value.trim();
+      if (id) {
+        roomId = id;
+        showToast("👥 Betrete Raum " + id);
+        listenGroup();
+      }
+    }
+
+    // Aktualisiert die eigene Position in Firebase
+    function updateGroup() {
+      if (userMarker) {
+        const pos = userMarker.getLatLng();
+        db.collection("live").doc(alias).set({
+          name: localStorage.username || alias,
+          lat: pos.lat,
+          lng: pos.lng,
+          room: roomId,
+          ts: Date.now()
+        });
+      }
+    }
+
+    // Hört auf andere Gruppenmitglieder
+    function listenGroup() {
+      db.collection("live").where("room", "==", roomId).onSnapshot(snap => {
+        snap.forEach(doc => {
+          const d = doc.data();
+          if (doc.id === alias) return;
+
+          if (!groupMarkers[doc.id]) {
+            groupMarkers[doc.id] = L.marker([d.lat, d.lng], {
+              icon: L.divIcon({ className: "group-icon", html: "👥" })
+            }).addTo(map);
+          } else {
+            groupMarkers[doc.id].setLatLng([d.lat, d.lng]);
+          }
+        });
+      });
+    }
+    function toggleRoom() {
+  const box = document.getElementById("roomBox");
+  box.style.display = (box.style.display === "none") ? "block" : "none";
+    }
+
+    /////////////////////////////////////////
+    // 🚨 Sicherheitsfunktionen
+    /////////////////////////////////////////
+
+    // Sendet Notrufposition
+    function sendSOS() {
+      if (!confirm("⚠️ Bist du sicher, dass du ein SOS senden möchtest?")) return;
+
+     if (userMarker) {
+        const pos = userMarker.getLatLng();
+        showToast("⚠️ SOS gesendet: " + pos.lat.toFixed(5) + "," + pos.lng.toFixed(5));
+        logDebug("SOS at " + pos);
+      }
+    }
+
+    /////////////////////////////////////////
+    // 🧭 Routingfunktionen
+    /////////////////////////////////////////
+
+    // Follow-Modus umschalten
+    function toggleFollow() {
+      follow = !follow;
+      showToast("📍 Follow " + (follow ? "AN" : "AUS"));
+    }
+
+    // Sprachführung umschalten
+    function toggleVoice() {
+      voice = !voice;
+      showToast("🔊 Voice " + (voice ? "AN" : "AUS"));
+    }
+
+    // Text sprechen lassen
+    function speak(text) {
+      if (!voice) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = "de-DE";
+      speechSynthesis.cancel();
+      speechSynthesis.speak(u);
+    }
+
+    // Startet die Route
+   let currentRoutePath = [];     // Aktuelle Routing-Punkte (alle)
+let currentHutIndex = 0;       // Aktuelle Zielhütte in selected[]
+function startRoute() {
+  try {
+    if (!userMarker || !Array.isArray(selected) || selected.length === 0) {
+      showToast("❗ Bitte mindestens eine Hütte auswählen");
+      return;
+    }
+
+    const userPos = userMarker?.getLatLng();
+// 🧹 Vorherige Linien entfernen, wenn vorhanden
+    clearRouteLines();
+if (routingLine) {
+  map.removeLayer(routingLine);
+  routingLine = null;
+}
+if (progressLine) {
+  map.removeLayer(progressLine);
+  progressLine = null;
+}
+    
+    if (navInterval) {
+  clearInterval(navInterval);
+  navInterval = null;
+    }
+    
+
+    if (routingLine) map.removeLayer(routingLine);
+    if (progressLine) map.removeLayer(progressLine);
+
+    speak("Navigation gestartet. Viel Spaß!");
+    tourStartTime = Date.now();
+    tourDistance = 0;
+    challengeProgress = 0;
+    currentHutIndex = 0;
+
+    const coords = [
+      [userMarker.getLatLng().lng, userMarker.getLatLng().lat],
+      ...selected.map(h => [h.lng, h.lat])
+    ];
+
+    fetch("https://api.openrouteservice.org/v2/directions/cycling-regular/geojson", {
+      method: "POST",
+      headers: {
+        "Authorization": "5b3ce3597851110001cf624866907189b4974b88e5541b15dfed2e1603067f5b85cd6da44c68ee87",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ coordinates: coords })
+    })
+      .then(r => r.json())
+      .then(data => {
+        const points = data.features?.[0]?.geometry?.coordinates?.map(p => [p[1], p[0]]);
+        if (!points || points.length < 2) {
+          showToast("⚠️ Route unvollständig");
+          return;
+        }
+
+        routingLine = L.polyline(points, { color: "#f80", weight: 5 }).addTo(map);
+        progressLine = L.polyline([], { color: "#ccc", weight: 4 }).addTo(map);
+        //map.fitBounds(routingLine.getBounds(), { padding: [30, 30] });
+
+        routingLine = L.polyline(points, { color: "#f80", weight: 5 }).addTo(map);
+progressLine = L.polyline([], { color: "#ccc", weight: 4 }).addTo(map);
+progressLine.setStyle({ color: "#00f" }); // Fortgeschrittener Teil blau statt grau
+        if (userPos) {
+  map.setView(userPos, 17); // Zoom-Level anpassen nach Wunsch
+        }
+        
+        currentRoutePath = [...points];
+        navInterval = setInterval(navLoop, 10000);
+        updateSelectedList();
+        document.getElementById("startBtn").style.display = "none";
+document.getElementById("stopBtn").style.display = "inline-block";
+        follow = true;
+orientationListenerActive = true;
+enableCompassRotation();
+        saveRouteToLocal(); // 💾 speichert Route
+        showDashboardAlert();
+        document.querySelector("button[onclick='toggleFollow()']").style.display = "none";
+      })
+      .catch(err => {
+        console.warn("❌ Routing-Fehler:", err);
+        showToast("❗ Routenberechnung fehlgeschlagen");
+      });
+  } catch (err) {
+    console.warn("❌ Fehler in startRoute():", err);
+  }
+}
+
+    // Überspringt aktuelle Hütte
+    function skipHut() {
+      if (navInterval) {
+        clearInterval(navInterval);
+        selected.shift();
+        showToast("⏭️ Hütte übersprungen");
+        startRoute();
+      }
+    }
+
+function stopNavigation() {
+  clearInterval(navInterval);
+  navInterval = null;
+
+  document.getElementById("stopBtn").style.display = "none";
+  document.getElementById("startBtn").style.display = "inline-block";
+
+  speak("Navigation gestoppt");
+  showToast("🛑 Navigation gestoppt");
+
+  follow = false;
+  orientationListenerActive = false;
+  disableCompassRotation();
+  clearRouteLines();
+
+  // UI-Elemente zurücksetzen
+  const followBtn = document.querySelector("button[onclick='toggleFollow()']");
+  if (followBtn) followBtn.style.display = "inline-block";
+  document.getElementById("navBanner").style.display = "none";
+  document.getElementById("routeInfo").style.display = "none";
+
+  // Karte zurücksetzen
+  if (map && userMarker) {
+    map.setView(userMarker.getLatLng(), 13);
+  }
+
+  // Linien entfernen
+  if (routingLine) {
+    map.removeLayer(routingLine);
+    routingLine = null;
+  }
+  if (progressLine) {
+    map.removeLayer(progressLine);
+    progressLine = null;
+  }
+
+  // Route-Daten zurücksetzen
+  currentRoutePath = [];
+  currentHutIndex = 0;
+
+  updateSelectedList();
+  showDashboardAlert();
+
+  // Karte visuell nach oben schieben wieder zurücknehmen
+  if (map._navOffsetApplied) {
+    map.panBy([0, -100], { animate: true });
+    map._navOffsetApplied = false;
+  }
+}
+/*    function stopNavigation() {
+  clearInterval(navInterval);
+  navInterval = null;
+
+  document.getElementById("stopBtn").style.display = "none";
+  document.getElementById("startBtn").style.display = "inline-block";
+
+  showToast("🛑 Navigation gestoppt");
+  speak("Navigation gestoppt");
+  updateSelectedList();
+      orientationListenerActive = false;
+follow = false;
+disableCompassRotation();
+      showDashboardAlert();
+      document.querySelector("button[onclick='toggleFollow()']").style.display = "inline-block";
+      if (userMarker) {
+  map.setView(userMarker.getLatLng(), 13); // Zoom-Level zurück (z. B. Überblick)
+        document.getElementById("navBanner").style.display = "none";
+      }
+}*/
+    // Navigationsschleife zur Routenverfolgung
+ function navLoop() {
+  try {
+    if (!Array.isArray(currentRoutePath) || currentRoutePath.length < 2 || !userMarker) return;
+    if (!Array.isArray(selected) || selected.length === 0) return;
+    if (currentHutIndex >= selected.length) return;
+
+    const pos = userMarker.getLatLng();
+    const currentHut = selected[currentHutIndex];
+    const hutLatLng = L.latLng(currentHut.lat, currentHut.lng);
+    const dist = map.distance(pos, hutLatLng);
+
+    // 🎯 Benutzer ist an aktueller Hütte angekommen
+    if (dist < 40) {
+      speak(`Angekommen bei ${currentHut.name}`);
+      progressLine?.addLatLng(hutLatLng);
+      updateChallenge();
+
+      currentHutIndex++;
+
+      if (currentHutIndex >= selected.length) {
+        stopNavigation();
+        speak("🎉 Alle Hütten erreicht!");
+        logSummary();
+      }
+
+      updateSelectedList();
+      return;
+    }
+
+    // 🚴 Unterwegs – Anzeige aktualisieren
+    speakNextInstruction(currentHut.name, dist);
+
+    const remaining = currentRoutePath.reduce((sum, p, i, arr) =>
+      i > 0 ? sum + map.distance(arr[i - 1], p) : 0, 0);
+
+    document.getElementById("routeInfo").innerText =
+      `${(remaining / 1000).toFixed(1)} km · ${Math.round(remaining / 250)} Min · ${currentHut.name}`;
+    document.getElementById("routeInfo").style.display = "block";
+
+
+
+    // ⬆️ Navigationsbanner aktualisieren
+document.getElementById("navBanner").style.display = "flex";
+document.getElementById("navInstruction").innerText = `➡️ Nächste: ${selected[0]?.name || "-"}`;
+document.getElementById("navDistance").innerText = `${Math.round(dist)} m`;
+    updateGroup();
+
+// 🧭 Re-Zentriere auf User (bei Navigation aktiv & Follow aktiviert)
+if (follow && userMarker && map) {
+  const ll = userMarker.getLatLng();
+  map.setView(ll, map.getZoom(), { animate: true });
+  map.panBy([0, 100], { animate: true }); // User etwas nach unten rücken
+}
+  } catch (err) {
+    console.warn("⚠️ Fehler in navLoop():", err);
+  }
+}
+
+    // Fortschritt updaten (Challenge)
+    function updateChallenge() {
+      challengeProgress++;
+      showToast(`🥚 ${challengeProgress} besucht`);
+      if (challengeProgress === selected.length) {
+        showToast("🏆 Challenge geschafft");
+      }
+    }
+
+    // Zusammenfassung nach Tour
+    function logSummary() {
+      const dur = Math.round((Date.now() - tourStartTime) / 60000);
+      alert(`🏁 Tour: ${(tourDistance / 1000).toFixed(2)} km in ${dur} Min`);
+    }
+
+/////////////////////////////////////////
+// 📋 Popup Hütte
+/////////////////////////////////////////
+
+
+    function changePopupImage(popupId, direction) {
+  const container = document.getElementById(popupId);
+  if (!container) return;
+
+  const img = container.querySelector("img");
+  if (!img) return;
+
+  const fotos = JSON.parse(img.getAttribute("data-fotos"));
+  let index = parseInt(img.getAttribute("data-index") || "0");
+
+  index = (index + direction + fotos.length) % fotos.length;
+  img.setAttribute("src", fotos[index]);
+  img.setAttribute("data-index", index);
+    }
+    /////////////////////////////////////////
+    // 📋 Auswahlliste
+    /////////////////////////////////////////
+
+function saveRouteToLocal() {
+  if (!Array.isArray(selected) || selected.length === 0) return;
+  const key = `savedRoute_${roomId}`;
+  localStorage.setItem(key, JSON.stringify(selected));
+  console.log("💾 Route gespeichert:", key);
+}
+
+function loadRouteFromLocal() {
+  const key = `savedRoute_${roomId}`;
+  const data = localStorage.getItem(key);
+  if (!data) return;
+
+  try {
+    const stored = JSON.parse(data);
+    if (!Array.isArray(stored)) return;
+
+    // Suche passende Hüttenobjekte aus aktueller Datenbank
+    const ids = stored.map(h => h.id);
+    const rehydrated = huts.filter(h => ids.includes(h.id));
+
+    selected = rehydrated;
+    updateSelectedList();
+    console.log("📦 Route wiederhergestellt für Raum:", roomId);
+  } catch (e) {
+    console.warn("❌ Fehler beim Laden gespeicherter Route:", e);
+  }
+}
+    
+    // Aktualisiert die Listenanzeige der gewählten Hütten
+/*function updateSelectedList() {
+  const ul = document.getElementById("selectedList");
+  if (!ul || !Array.isArray(selected)) return;
+
+  ul.innerHTML = "";
+
+  if (selected.length === 0) {
+    const li = document.createElement("li");
+    li.innerText = "⚠️ Keine Hütten ausgewählt.";
+    ul.appendChild(li);
+    return;
+  }
+
+  selected.forEach((h, i) => {
+    const li = document.createElement("li");
+    li.setAttribute("draggable", "true");
+    li.setAttribute("data-index", i);
+    li.ondragstart = drag;
+    li.innerHTML = `🔢 ${i + 1}. ${h.name} <button onclick="removeHut('${h.id}')">🗑️</button>`;
+    ul.appendChild(li);
+  });
+}*/
+   /*function updateSelectedList() {
+  const ul = document.getElementById("selectedList");
+  if (!ul || !Array.isArray(selected)) return;
+
+  ul.innerHTML = "";
+
+  // 🧯 Kein Eintrag?
+  if (selected.length === 0) {
+    const li = document.createElement("li");
+    li.innerText = "⚠️ Keine Hütten ausgewählt.";
+    ul.appendChild(li);
+    return;
+  }
+
+  const isNavigating = !!navInterval;
+  const pos = userMarker?.getLatLng?.();
+  const next = selected[0];
+  const routePoints = routingLine?.getLatLngs?.();
+
+  const canShowStats = (
+    isNavigating &&
+    pos &&
+    next &&
+    Array.isArray(routePoints) &&
+    routePoints.length > 1
+  );
+
+  // 📊 Wenn Navigation läuft, oben Statistik anzeigen
+  if (canShowStats) {
+    try {
+      const dist = map.distance(pos, L.latLng(next.lat, next.lng));
+      const totalDist = routePoints.reduce((sum, p, i, arr) =>
+        i > 0 ? sum + map.distance(arr[i - 1], p) : 0, 0);
+
+      const statLi = document.createElement("li");
+      statLi.style.background = "#f0f0f0";
+      statLi.style.padding = "8px";
+      statLi.style.marginBottom = "6px";
+      statLi.style.borderRadius = "8px";
+      statLi.innerHTML = `
+        <b>📊 Navigation aktiv</b><br/>
+        🧭 Nächste: <b>${next.name}</b><br/>
+        📏 Entfernung: <b>${Math.round(dist)} m</b><br/>
+        ⏱️ Gesamt: ${(totalDist / 1000).toFixed(1)} km ≈ ${Math.round(totalDist / 250)} min<br/>
+        🥚 Hütten übrig: ${selected.length}
+      `;
+      ul.appendChild(statLi);
+    } catch (e) {
+      console.warn("⚠️ Statistik konnte nicht berechnet werden:", e);
+    }
+  }
+
+  // 🔁 Liste darunter anzeigen – auch während Navigation
+  selected.forEach((h, i) => {
+    const li = document.createElement("li");
+    li.setAttribute("draggable", "true");
+    li.setAttribute("data-index", i);
+    li.ondragstart = drag;
+    li.innerHTML = `
+      🔢 ${i + 1}. ${h.name}
+      <button onclick="removeHut('${h.id}')">🗑️</button>
+    `;
+    ul.appendChild(li);
+  });
+}*/
+    function updateSelectedList() {
+  const ul = document.getElementById("selectedList");
+  if (!ul || !Array.isArray(selected)) return;
+
+  ul.innerHTML = "";
+
+  if (selected.length === 0) {
+    const li = document.createElement("li");
+    li.innerText = "⚠️ Keine Hütten ausgewählt.";
+    ul.appendChild(li);
+    return;
+  }
+
+  selected.forEach((h, i) => {
+    const li = document.createElement("li");
+    li.setAttribute("draggable", "true");
+    li.setAttribute("data-index", i);
+    li.ondragstart = drag;
+
+    const isActive = i === currentHutIndex && navInterval;
+    li.innerHTML = `
+      ${isActive ? "🟢" : "🔢"} ${i + 1}. ${h.name}
+      <button onclick="removeHut('${h.id}')">🗑️</button>
+    `;
+    ul.appendChild(li);
+  });
+    }
+// Drag & Drop-Logik
+function allowDrop(ev) {
+  ev.preventDefault();
+}
+function drag(ev) {
+  ev.dataTransfer.setData("text", ev.target.getAttribute("data-index"));
+}
+function drop(ev) {
+  ev.preventDefault();
+  const from = parseInt(ev.dataTransfer.getData("text"));
+  const to = parseInt(ev.target.closest("li").getAttribute("data-index"));
+  if (from !== to) {
+    const moved = selected.splice(from, 1)[0];
+    selected.splice(to, 0, moved);
+    updateSelectedList();
+    showToast("🔃 Reihenfolge geändert");
+    if (navInterval) startRoute(); // Route neu starten
+  }
+}
+    function resetRoute() {
+  stopNavigation(); // alle Navigationselemente entfernen
+
+  selected = [];
+  updateSelectedList();
+  showToast("🗑️ Route zurückgesetzt");
+    }
+  /*function resetRoute() {
+     if (routingLine) map.removeLayer(routingLine);
+     if (progressLine) map.removeLayer(progressLine);
+     clearInterval(navInterval);
+     navInterval = null;
+     showToast("🗑️ Route gelöscht");
+     document.getElementById("routeInfo").style.display = "none";
+    updateSelectedList(); // ✅ Zeigt Statistik-Liste an, siehe unten
+  }*/
+    // Entfernt eine Hütte aus der Auswahl
+    function removeHut(id) {
+  const index = selected.findIndex(h => h.id === id);
+  if (index !== -1) {
+    selected.splice(index, 1);
+    updateSelectedList();
+    showToast("❌ Hütte entfernt");
+
+    // Wenn Navigation läuft, Route neu starten oder abbrechen
+    if (navInterval) {
+      clearInterval(navInterval);
+      navInterval = null;
+      saveRouteToLocal();
+
+      if (selected.length > 0) {
+        startRoute();
+      } else {
+        stopNavigation();
+        resetRoute();
+      }
+    }
+  }
+}
+
+    // Fügt Hütte zur Auswahlliste hinzu
+    function toggleSelection(id) {
+      const hut = huts.find(h => h.id === id);
+      if (!hut) {
+        showToast("❗ Hütte nicht gefunden");
+        return;
+      }
+      if (selected.some(h => h.id === id)) {
+        showToast("⚠️ Bereits ausgewählt");
+        return;
+      }
+      
+      selected.push(hut);
+      updateSelectedList();
+      showToast("✔️ Hinzugefügt: " + hut.name);
+      showDashboardAlert();
+    
+    // Wenn die Route gestartet ist und eine neue Hütte hinzugefügt wird :
+     if (navInterval) {
+        showToast("➕ Neue Hütte hinzugefügt, Route wird neu berechnet.");
+        speak("Neue Hütte hinzugefügt, Route wird aktualisiert.");
+        clearInterval(navInterval);
+        startRoute();
+     }
+    
+    }
+
+    /////////////////////////////////////////
+    // 🚀 Initialisierung
+    /////////////////////////////////////////
+
+    function init() {
+      initUsername();
+      try {
+         updateSelectedList();
+      } catch (err) {
+         console.warn("Fehler beim Initialen updateSelectedList:", err);
+      }
+      map = L.map("map", { center: [47.3, 11.4], zoom: 13 });
+    //  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+     isDarkTheme = localStorage.getItem("mapTheme") === "dark";
+     createTileLayer(isDarkTheme);
+      document.getElementById("toggleThemeBtn").textContent = isDarkTheme ? "☀️" : "🌙";
+     // 🌗 UI-Darstellung auch aktivieren
+     document.body.classList.add(isDarkTheme ? "dark-mode" : "light-mode");
+      
+     map.addLayer(cluster);
+
+      const select = document.getElementById("voiceLang");
+if (select) select.value = localStorage.lang || "de-DE";
+
+      navigator.geolocation.watchPosition(
+  p => {
+    const ll = [p.coords.latitude, p.coords.longitude];
+
+    if (!userMarker) {
+      userMarker = L.marker(ll).addTo(map);
+      map.setView(ll, 15);
+      document.getElementById("loader").style.display = "none";
+    } else {
+      userMarker.setLatLng(ll);
+
+      // ✅ Nur folgen, wenn Follow aktiv ist UND kein Kompass stört
+      if (follow && !orientationListenerActive) {
+        map.setView(ll);
+      }
+    }
+
+    updateGroup();
+  },
+  () => {
+    document.getElementById("loader").style.display = "none";
+    showToast("⚠️ GPS nicht verfügbar");
+  },
+  { enableHighAccuracy: true }
+);
+
+      listenGroup();
+
+      db.collection("eierhuetten").onSnapshot(snap => {
+        huts = [];
+        cluster.clearLayers();
+        snap.forEach(doc => {
+          const d = doc.data();
+          if (!d.location || d.status != "angenommen") return;
+          const h = {
+            id: doc.id,
+            name: d.name,
+            lat: d.location.latitude,
+            lng: d.location.longitude
+          };
+          huts.push(h);
+          
+/*
+          const m = L.marker([h.lat, h.lng]).bindPopup(
+  `<div style="min-width:220px">
+    <b>${d.name || "Unbenannt"}</b><br/>
+    🕓 <b>Öffnungszeiten:</b> ${d.oeffnungszeiten || "?"}<br/>
+    ⚡ <b>Strom:</b> ${d.strom === "Ja" ? "✅" : "❌"}<br/>
+    🪑 <b>Sitzplätze:</b> ${d.sitzplaetze === "Ja" ? "✅" : "❌"}<br/>
+    🧾 <b>Extras:</b> ${d.extras || "–"}<br/>
+    💳 <b>Abo:</b> ${d.aboMonate || 0} Monate<br/>
+    📅 <b>Start:</b> ${d.aboStart?.toDate?.().toLocaleDateString("de-DE") || "-"}<br/>
+    <hr style="margin:6px 0"/>
+    <button onclick="toggleSelection('${doc.id}')">✅ Hinzufügen</button>
+  </div>`
+);*/
+
+          const popupId = `popup-${doc.id}`;
+
+const m = L.marker([h.lat, h.lng]).bindPopup(`
+  <div id="${popupId}" style="min-width:220px; font-size:14px">
+    <div class="popup-image-container" style="position:relative;">
+      ${
+        Array.isArray(d.fotos) && d.fotos.length > 0
+          ? `<img src="${d.fotos[0]}" data-index="0" data-fotos='${JSON.stringify(d.fotos)}' style="width:100%; border-radius:8px; max-height:140px; object-fit:cover;">`
+          : `<div style="height:140px; background:#ccc; display:flex; align-items:center; justify-content:center; border-radius:8px;">Kein Bild</div>`
+      }
+      ${
+        d.fotos?.length > 1
+          ? `<button style="position:absolute;top:50%;left:0;transform:translateY(-50%);background:#0008;color:#fff;border:none;padding:4px 8px;border-radius:0 6px 6px 0;cursor:pointer;" onclick="changePopupImage('${popupId}', -1)">←</button>
+             <button style="position:absolute;top:50%;right:0;transform:translateY(-50%);background:#0008;color:#fff;border:none;padding:4px 8px;border-radius:6px 0 0 6px;cursor:pointer;" onclick="changePopupImage('${popupId}', 1)">→</button>`
+          : ""
+      }
+    </div>
+    <b>${d.name || "Unbenannt"}</b><br/>
+    🕓 <b>Öffnungszeiten:</b> ${d.oeffnungszeiten || "?"}<br/>
+    ⚡ <b>Strom:</b> ${d.strom === "Ja" ? "✅" : "❌"}<br/>
+    🪑 <b>Sitzplätze:</b> ${d.sitzplaetze === "Ja" ? "✅" : "❌"}<br/>
+    🧾 <b>Extras:</b> ${d.extras || "–"}<br/>
+    💳 <b>Abo:</b> ${d.aboMonate || 0} Monate<br/>
+    📅 <b>Start:</b> ${d.aboStart?.toDate?.().toLocaleDateString("de-DE") || "-"}<br/>
+    <hr style="margin:6px 0"/>
+    <button onclick="toggleSelection('${doc.id}')">✅ Hinzufügen</button>
+  </div>
+`);
+
+
+
+
+          
+          cluster.addLayer(m);
+        });
+
+     
+      });
+
+      // Falls GPS nicht lädt
+      setTimeout(() => {
+        const l = document.getElementById("loader");
+        if (l && l.style.display != "none") {
+          l.style.display = "none";
+          showToast("⏳ Timeout");
+        }
+      }, 10000);
+      setTimeout(() => {
+         loadRouteFromLocal();
+      }, 2000);
+    }
+
+    document.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
