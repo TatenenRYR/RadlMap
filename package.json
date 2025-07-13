@@ -1,0 +1,13 @@
+
+{
+  "name": "eierhuetteapp",
+  "version": "1.0.0",
+  "description": "Eierhütten Navigation",
+  "author": "Eierhuetten Dev",
+  "license": "MIT",
+  "dependencies": {},
+  "cordova": {
+    "plugins": {},
+    "platforms": ["android"]
+  }
+}

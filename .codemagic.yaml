@@ -8,6 +8,7 @@ workflows:
       java: 11
     scripts:
       - npm install -g cordova
+      - cordova platform add android
       - cordova build android
     artifacts:
       - platforms/android/app/build/outputs/**/*.apk
