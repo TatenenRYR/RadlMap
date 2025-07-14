@@ -1279,7 +1279,7 @@ function drop(ev) {
       const select = document.getElementById("voiceLang");
 if (select) select.value = localStorage.lang || "de-DE";
 
-      navigator.geolocation.watchPosition(
+      window.navigator.geolocation.watchPosition(
   p => {
     const ll = [p.coords.latitude, p.coords.longitude];
 
