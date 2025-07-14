@@ -291,16 +291,27 @@ body.dark-mode .leaflet-popup-tip {
 body.dark-mode .leaflet-popup-content {
   color: var(--fg-color) !important;
 }
+    #navBanner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1001;
+  padding: 10px 14px;
+  font-size: 18px;
+  background: #333;
+  color: white;
+  display: none;
+  justify-content: space-between;
+  align-items: center;
+  height: 80px;
+    }
 
   </style>
 </head>
 <body>
   <!-- 🔝 Navigationsbanner -->
-<div id="navBanner" style="
-  display:none; position:fixed; top:0; left:0; right:0;
-  z-index:1002; background:#222; color:#fff;
-  padding:14px 20px; font-size:18px;
-  display:flex; justify-content:space-between; align-items:center;">
+<div id="navBanner">
   <span id="navInstruction">🚴 Navigation aktiv</span>
   <span id="navDistance">0 m</span>
 </div>
@@ -410,14 +421,27 @@ body.dark-mode .leaflet-popup-content {
    /////////////////////////////////////////
    // 🧩 UI Funktion
    /////////////////////////////////////////
-function adjustMapForBanner(visible) {
-  if (!map) return;
-  if (visible && !map._navOffsetApplied) {
-    map.panBy([0, 100], { animate: true });
-    map._navOffsetApplied = true;
-  } else if (!visible && map._navOffsetApplied) {
-    map.panBy([0, -100], { animate: true });
-    map._navOffsetApplied = false;
+
+    function showNavBanner(text) {
+  const banner = document.getElementById("navBanner");
+  banner.innerText = text;
+  banner.style.display = "flex";
+
+  // Karte leicht nach unten verschieben
+  if (map && !map._navOffset) {
+    map.panBy([0, 80], { animate: true });
+    map._navOffset = true;
+  }
+}
+
+function hideNavBanner() {
+  const banner = document.getElementById("navBanner");
+  banner.style.display = "none";
+
+  // Karte wieder zurück
+  if (map && map._navOffset) {
+    map.panBy([0, -80], { animate: true });
+    map._navOffset = false;
   }
 }
     
@@ -803,6 +827,7 @@ if (progressLine) {
     if (progressLine) map.removeLayer(progressLine);
 
     speak("Navigation gestartet. Viel Spaß!");
+    showNavBanner("Navigation gestartet. Viel Spaß!");
     tourStartTime = Date.now();
     tourDistance = 0;
     challengeProgress = 0;
@@ -891,7 +916,7 @@ function stopNavigation() {
   if (followBtn) followBtn.style.display = "inline-block";
   //document.getElementById("navBanner").style.display = "none";
  document.getElementById("navBanner").style.display = "none";
- adjustMapForBanner(false);
+ hideNavBanner();
   document.getElementById("routeInfo").style.display = "none";
 
   // Karte zurücksetzen
@@ -987,7 +1012,7 @@ disableCompassRotation();
     // ⬆️ Navigationsbanner aktualisieren
     const banner = document.getElementById("navBanner");
     banner.style.display = "flex";
-    adjustMapForBanner(true);
+    
 //document.getElementById("navBanner").style.display = "flex";
 document.getElementById("navInstruction").innerText = `➡️ Nächste: ${selected[0]?.name || "-"}`;
 document.getElementById("navDistance").innerText = `${Math.round(dist)} m`;
@@ -1294,6 +1319,8 @@ function drop(ev) {
 
       const select = document.getElementById("voiceLang");
 if (select) select.value = localStorage.lang || "de-DE";
+document.addEventListener("deviceready", () => {
+  
 
       window.navigator.geolocation.watchPosition(
   p => {
@@ -1323,6 +1350,7 @@ if (select) select.value = localStorage.lang || "de-DE";
   },
   { enableHighAccuracy: true }
 );
+  });
 
       listenGroup();
 
