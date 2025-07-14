@@ -8,9 +8,12 @@ workflows:
     scripts:
       - npm install -g cordova
       - cordova platform add android
-      # ↓ Gradle-Version manuell setzen (vor dem Build!)
-      - sed -i.bak 's/distributionUrl=.*/distributionUrl=https\:\/\/services.gradle.org\/distributions\/gradle-8.0-all.zip/' platforms/android/gradle/wrapper/gradle-wrapper.properties
-      # ↓ Jetzt erst bauen
+      # Erster Versuch, um Gradle-Dateien zu erzeugen (Fehler sind ok)
+      - |
+        cordova build android || echo "Initial build failed as expected, continuing..."
+      # Jetzt ist gradle-wrapper.properties vorhanden → Gradle-Version setzen
+      - sed -i.bak 's|distributionUrl=.*|distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-all.zip|' platforms/android/gradle/wrapper/gradle-wrapper.properties
+      # Finaler Build mit richtiger Gradle-Version
       - cordova build android
     artifacts:
       - platforms/android/app/build/outputs/**/*.apk
