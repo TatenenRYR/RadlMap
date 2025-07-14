@@ -889,7 +889,9 @@ function stopNavigation() {
   // UI-Elemente zurücksetzen
   const followBtn = document.querySelector("button[onclick='toggleFollow()']");
   if (followBtn) followBtn.style.display = "inline-block";
-  document.getElementById("navBanner").style.display = "none";
+  //document.getElementById("navBanner").style.display = "none";
+ document.getElementById("navBanner").style.display = "none";
+ adjustMapForBanner(false);
   document.getElementById("routeInfo").style.display = "none";
 
   // Karte zurücksetzen
@@ -1297,6 +1299,9 @@ if (select) select.value = localStorage.lang || "de-DE";
   p => {
     const ll = [p.coords.latitude, p.coords.longitude];
 
+    if (!p.coords.latitude || !p.coords.longitude) {
+       showToast("⚠️ GPS-Position leer");
+    }
     if (!userMarker) {
       userMarker = L.marker(ll).addTo(map);
       map.setView(ll, 15);
