@@ -410,7 +410,18 @@ body.dark-mode .leaflet-popup-content {
    /////////////////////////////////////////
    // 🧩 UI Funktion
    /////////////////////////////////////////
-function speakNextInstruction(name, dist) {
+function adjustMapForBanner(visible) {
+  if (!map) return;
+  if (visible && !map._navOffsetApplied) {
+    map.panBy([0, 100], { animate: true });
+    map._navOffsetApplied = true;
+  } else if (!visible && map._navOffsetApplied) {
+    map.panBy([0, -100], { animate: true });
+    map._navOffsetApplied = false;
+  }
+}
+    
+    function speakNextInstruction(name, dist) {
   if (!voice || !name || dist == null) return;
 
   let msg = "";
@@ -972,7 +983,10 @@ disableCompassRotation();
 
 
     // ⬆️ Navigationsbanner aktualisieren
-document.getElementById("navBanner").style.display = "flex";
+    const banner = document.getElementById("navBanner");
+    banner.style.display = "flex";
+    adjustMapForBanner(true);
+//document.getElementById("navBanner").style.display = "flex";
 document.getElementById("navInstruction").innerText = `➡️ Nächste: ${selected[0]?.name || "-"}`;
 document.getElementById("navDistance").innerText = `${Math.round(dist)} m`;
     updateGroup();
