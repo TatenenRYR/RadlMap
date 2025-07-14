@@ -1,4 +1,3 @@
-
 workflows:
   build-eierhuette:
     name: Build Eierhütte Cordova App
@@ -9,6 +8,9 @@ workflows:
     scripts:
       - npm install -g cordova
       - cordova platform add android
+      # ↓ Gradle auf kompatible Version setzen
+      - cd platforms/android && ./gradlew wrapper --gradle-version 8.0 && cd ../..
+      # ↓ Jetzt den eigentlichen Build starten
       - cordova build android
     artifacts:
       - platforms/android/app/build/outputs/**/*.apk
