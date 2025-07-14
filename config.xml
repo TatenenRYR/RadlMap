@@ -10,4 +10,9 @@
   <access origin="*" />
   <allow-intent href="*" />
   <preference name="orientation" value="portrait" />
+  <platform name="android">
+  <edit-config file="AndroidManifest.xml" mode="merge" target="/manifest/uses-permission">
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+  </edit-config>
+  </platform>
 </widget>
