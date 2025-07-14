@@ -4,16 +4,16 @@ workflows:
     max_build_duration: 20
     environment:
       node: 16
-      java: 11
+      java: 17   # ← Wichtig!
     scripts:
       - npm install -g cordova
       - cordova platform add android
-      # Erster Versuch, um Gradle-Dateien zu erzeugen (Fehler sind ok)
+      # Initialer Build nur zur Gradle-Dateierstellung (Fehler erlaubt)
       - |
-        cordova build android || echo "Initial build failed as expected, continuing..."
+        cordova build android || echo "Initial build failed, continuing to patch Gradle..."
       # Jetzt ist gradle-wrapper.properties vorhanden → Gradle-Version setzen
       - sed -i.bak 's|distributionUrl=.*|distributionUrl=https\://services.gradle.org/distributions/gradle-8.0-all.zip|' platforms/android/gradle/wrapper/gradle-wrapper.properties
-      # Finaler Build mit richtiger Gradle-Version
+      # Finaler Build
       - cordova build android
     artifacts:
       - platforms/android/app/build/outputs/**/*.apk
