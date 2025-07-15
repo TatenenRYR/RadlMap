@@ -7,7 +7,7 @@ workflows:
       java: 17   # ← Wichtig!
     scripts:
       - npm install -g cordova
-      - cordova plugin add cordova-plugin-geolocation
+     # - cordova plugin add cordova-plugin-geolocation
       - cordova platform add android
       # Initialer Build nur zur Gradle-Dateierstellung (Fehler erlaubt)
       - |
