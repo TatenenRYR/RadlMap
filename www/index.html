@@ -1299,7 +1299,34 @@ function drop(ev) {
     /////////////////////////////////////////
     // 🚀 Initialisierung
     /////////////////////////////////////////
+function startLocationTracking() {
+  logDebug("🛰️ Starte GPS...");
+  navigator.geolocation.watchPosition(
+    p => {
+      const ll = [p.coords.latitude, p.coords.longitude];
+      logDebug("📍 GPS:", ll);
 
+      if (!userMarker) {
+        userMarker = L.marker(ll).addTo(map);
+        map.setView(ll, 15);
+        document.getElementById("loader").style.display = "none"; // ✅ wichtig!
+      } else {
+        userMarker.setLatLng(ll);
+        if (follow && !orientationListenerActive) {
+          map.setView(ll);
+        }
+      }
+
+      updateGroup();
+    },
+    err => {
+      console.warn("❌ GPS-Fehler:", err);
+      showToast("⚠️ GPS nicht verfügbar");
+      document.getElementById("loader").style.display = "none"; // ❗ auch hier!
+    },
+    { enableHighAccuracy: true }
+  );
+}
     function init() {
       initUsername();
       try {
@@ -1320,47 +1347,34 @@ function drop(ev) {
       const select = document.getElementById("voiceLang");
 if (select) select.value = localStorage.lang || "de-DE";
 document.addEventListener("deviceready", () => {
-  if (cordova.plugins && cordova.plugins.diagnostic) {
+  if (cordova?.plugins?.diagnostic) {
     cordova.plugins.diagnostic.requestLocationAuthorization(status => {
-      if (status === cordova.plugins.diagnostic.permissionStatus.GRANTED ||
-          status === cordova.plugins.diagnostic.permissionStatus.GRANTED_WHEN_IN_USE) {
-        
-        // ✅ Jetzt darf GPS verwendet werden:
-        window.navigator.geolocation.watchPosition(
-          p => {
-            const ll = [p.coords.latitude, p.coords.longitude];
-
-            if (!p.coords.latitude || !p.coords.longitude) {
-              showToast("⚠️ GPS-Position leer");
-            }
-            if (!userMarker) {
-              userMarker = L.marker(ll).addTo(map);
-              map.setView(ll, 15);
-              document.getElementById("loader").style.display = "none";
-            } else {
-              userMarker.setLatLng(ll);
-              if (follow && !orientationListenerActive) {
-                map.setView(ll);
-              }
-            }
-            updateGroup();
-          },
-          () => {
-            document.getElementById("loader").style.display = "none";
-            showToast("⚠️ GPS nicht verfügbar");
-          },
-          { enableHighAccuracy: true }
-        );
+      if (
+        status === cordova.plugins.diagnostic.permissionStatus.GRANTED ||
+        status === cordova.plugins.diagnostic.permissionStatus.GRANTED_WHEN_IN_USE
+      ) {
+        startLocationTracking();
       } else {
-        showToast("❌ Standortberechtigung nicht erteilt");
+        showToast("❌ Standort nicht freigegeben");
         document.getElementById("loader").style.display = "none";
       }
     }, err => {
-      console.error("Fehler bei Standortberechtigung:", err);
-      showToast("❌ Fehler bei Berechtigungsabfrage");
+      console.error("Fehler bei Standortfreigabe:", err);
       document.getElementById("loader").style.display = "none";
-    }, cordova.plugins.diagnostic.locationAuthorizationMode.WHEN_IN_USE);
+    });
+  } else {
+    // Fallback wenn diagnostic-Plugin fehlt
+    startLocationTracking();
   }
+
+  // Sicherheit: Timeout nach 12 Sekunden
+  setTimeout(() => {
+    const l = document.getElementById("loader");
+    if (l && l.style.display !== "none") {
+      l.style.display = "none";
+      showToast("⏳ Timeout");
+    }
+  }, 12000);
 });
 
       listenGroup();
