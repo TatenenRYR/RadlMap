@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RadlMap Navigation</title>
+  <title>Eierhütten Navigation – Gruppen & Sicherheit</title>
 
   <!-- Leaflet & MarkerCluster CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -291,27 +291,16 @@ body.dark-mode .leaflet-popup-tip {
 body.dark-mode .leaflet-popup-content {
   color: var(--fg-color) !important;
 }
-    #navBanner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1001;
-  padding: 10px 14px;
-  font-size: 18px;
-  background: #333;
-  color: white;
-  display: none;
-  justify-content: space-between;
-  align-items: center;
-  height: 80px;
-    }
 
   </style>
 </head>
 <body>
   <!-- 🔝 Navigationsbanner -->
-<div id="navBanner">
+<div id="navBanner" style="
+  display:none; position:fixed; top:0; left:0; right:0;
+  z-index:1002; background:#222; color:#fff;
+  padding:14px 20px; font-size:18px;
+  display:flex; justify-content:space-between; align-items:center;">
   <span id="navInstruction">🚴 Navigation aktiv</span>
   <span id="navDistance">0 m</span>
 </div>
@@ -421,31 +410,7 @@ body.dark-mode .leaflet-popup-content {
    /////////////////////////////////////////
    // 🧩 UI Funktion
    /////////////////////////////////////////
-
-    function showNavBanner(text) {
-  const banner = document.getElementById("navBanner");
-  banner.innerText = text;
-  banner.style.display = "flex";
-
-  // Karte leicht nach unten verschieben
-  if (map && !map._navOffset) {
-    map.panBy([0, 80], { animate: true });
-    map._navOffset = true;
-  }
-}
-
-function hideNavBanner() {
-  const banner = document.getElementById("navBanner");
-  banner.style.display = "none";
-
-  // Karte wieder zurück
-  if (map && map._navOffset) {
-    map.panBy([0, -80], { animate: true });
-    map._navOffset = false;
-  }
-}
-    
-    function speakNextInstruction(name, dist) {
+function speakNextInstruction(name, dist) {
   if (!voice || !name || dist == null) return;
 
   let msg = "";
@@ -827,7 +792,6 @@ if (progressLine) {
     if (progressLine) map.removeLayer(progressLine);
 
     speak("Navigation gestartet. Viel Spaß!");
-    showNavBanner("Navigation gestartet. Viel Spaß!");
     tourStartTime = Date.now();
     tourDistance = 0;
     challengeProgress = 0;
@@ -914,9 +878,7 @@ function stopNavigation() {
   // UI-Elemente zurücksetzen
   const followBtn = document.querySelector("button[onclick='toggleFollow()']");
   if (followBtn) followBtn.style.display = "inline-block";
-  //document.getElementById("navBanner").style.display = "none";
- document.getElementById("navBanner").style.display = "none";
- hideNavBanner();
+  document.getElementById("navBanner").style.display = "none";
   document.getElementById("routeInfo").style.display = "none";
 
   // Karte zurücksetzen
@@ -1010,10 +972,7 @@ disableCompassRotation();
 
 
     // ⬆️ Navigationsbanner aktualisieren
-    const banner = document.getElementById("navBanner");
-    banner.style.display = "flex";
-    
-//document.getElementById("navBanner").style.display = "flex";
+document.getElementById("navBanner").style.display = "flex";
 document.getElementById("navInstruction").innerText = `➡️ Nächste: ${selected[0]?.name || "-"}`;
 document.getElementById("navDistance").innerText = `${Math.round(dist)} m`;
     updateGroup();
@@ -1319,16 +1278,11 @@ function drop(ev) {
 
       const select = document.getElementById("voiceLang");
 if (select) select.value = localStorage.lang || "de-DE";
-document.addEventListener("deviceready", () => {
-  
 
-      window.navigator.geolocation.watchPosition(
+      navigator.geolocation.watchPosition(
   p => {
     const ll = [p.coords.latitude, p.coords.longitude];
 
-    if (!p.coords.latitude || !p.coords.longitude) {
-       showToast("⚠️ GPS-Position leer");
-    }
     if (!userMarker) {
       userMarker = L.marker(ll).addTo(map);
       map.setView(ll, 15);
@@ -1350,7 +1304,6 @@ document.addEventListener("deviceready", () => {
   },
   { enableHighAccuracy: true }
 );
-  });
 
       listenGroup();
 
