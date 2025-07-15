@@ -8,6 +8,7 @@ workflows:
     scripts:
       - npm install -g cordova
       - cordova plugin add cordova-plugin-geolocation
+      - cordova plugin add cordova.plugins.diagnostic
       - cordova platform add android
       # Initialer Build nur zur Gradle-Dateierstellung (Fehler erlaubt)
       - |
