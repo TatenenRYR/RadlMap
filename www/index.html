@@ -1320,37 +1320,48 @@ function drop(ev) {
       const select = document.getElementById("voiceLang");
 if (select) select.value = localStorage.lang || "de-DE";
 document.addEventListener("deviceready", () => {
-  
+  if (cordova.plugins && cordova.plugins.diagnostic) {
+    cordova.plugins.diagnostic.requestLocationAuthorization(status => {
+      if (status === cordova.plugins.diagnostic.permissionStatus.GRANTED ||
+          status === cordova.plugins.diagnostic.permissionStatus.GRANTED_WHEN_IN_USE) {
+        
+        // ✅ Jetzt darf GPS verwendet werden:
+        window.navigator.geolocation.watchPosition(
+          p => {
+            const ll = [p.coords.latitude, p.coords.longitude];
 
-      window.navigator.geolocation.watchPosition(
-  p => {
-    const ll = [p.coords.latitude, p.coords.longitude];
-
-    if (!p.coords.latitude || !p.coords.longitude) {
-       showToast("⚠️ GPS-Position leer");
-    }
-    if (!userMarker) {
-      userMarker = L.marker(ll).addTo(map);
-      map.setView(ll, 15);
-      document.getElementById("loader").style.display = "none";
-    } else {
-      userMarker.setLatLng(ll);
-
-      // ✅ Nur folgen, wenn Follow aktiv ist UND kein Kompass stört
-      if (follow && !orientationListenerActive) {
-        map.setView(ll);
+            if (!p.coords.latitude || !p.coords.longitude) {
+              showToast("⚠️ GPS-Position leer");
+            }
+            if (!userMarker) {
+              userMarker = L.marker(ll).addTo(map);
+              map.setView(ll, 15);
+              document.getElementById("loader").style.display = "none";
+            } else {
+              userMarker.setLatLng(ll);
+              if (follow && !orientationListenerActive) {
+                map.setView(ll);
+              }
+            }
+            updateGroup();
+          },
+          () => {
+            document.getElementById("loader").style.display = "none";
+            showToast("⚠️ GPS nicht verfügbar");
+          },
+          { enableHighAccuracy: true }
+        );
+      } else {
+        showToast("❌ Standortberechtigung nicht erteilt");
+        document.getElementById("loader").style.display = "none";
       }
-    }
-
-    updateGroup();
-  },
-  () => {
-    document.getElementById("loader").style.display = "none";
-    showToast("⚠️ GPS nicht verfügbar");
-  },
-  { enableHighAccuracy: true }
-);
-  });
+    }, err => {
+      console.error("Fehler bei Standortberechtigung:", err);
+      showToast("❌ Fehler bei Berechtigungsabfrage");
+      document.getElementById("loader").style.display = "none";
+    }, cordova.plugins.diagnostic.locationAuthorizationMode.WHEN_IN_USE);
+  }
+});
 
       listenGroup();
 
