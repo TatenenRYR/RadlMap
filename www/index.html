@@ -1299,7 +1299,57 @@ function drop(ev) {
     /////////////////////////////////////////
     // 🚀 Initialisierung
     /////////////////////////////////////////
-function startLocationTracking() {
+function startGeolocation() {
+  navigator.geolocation.watchPosition(
+    p => {
+      const ll = [p.coords.latitude, p.coords.longitude];
+      if (!p.coords.latitude || !p.coords.longitude) {
+        showToast("⚠️ GPS-Position leer");
+      }
+      if (!userMarker) {
+        userMarker = L.marker(ll).addTo(map);
+        map.setView(ll, 15);
+        document.getElementById("loader").style.display = "none";
+      } else {
+        userMarker.setLatLng(ll);
+        if (follow && !orientationListenerActive) {
+          map.setView(ll);
+        }
+      }
+      updateGroup();
+    },
+    err => {
+      console.warn("GPS-Fehler:", err);
+      showToast("⚠️ GPS nicht verfügbar");
+      document.getElementById("loader").style.display = "none";
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+document.addEventListener("deviceready", () => {
+  if (window.cordova && cordova.plugins?.diagnostic) {
+    cordova.plugins.diagnostic.requestLocationAuthorization(status => {
+      if (
+        status === cordova.plugins.diagnostic.permissionStatus.GRANTED ||
+        status === cordova.plugins.diagnostic.permissionStatus.GRANTED_WHEN_IN_USE
+      ) {
+        startGeolocation();
+      } else {
+        showToast("❌ Standortberechtigung verweigert");
+        document.getElementById("loader").style.display = "none";
+      }
+    }, err => {
+      console.error("❌ Fehler bei Berechtigungsabfrage:", err);
+      showToast("❌ Fehler bei Berechtigungsabfrage");
+      document.getElementById("loader").style.display = "none";
+    }, cordova.plugins.diagnostic.locationAuthorizationMode.WHEN_IN_USE);
+  } else {
+    // Nicht-Cordova (z. B. Browser)
+    startGeolocation();
+  }
+});
+    function startLocationTracking() {
   logDebug("🛰️ Starte GPS...");
   navigator.geolocation.watchPosition(
     p => {
@@ -1346,36 +1396,7 @@ function startLocationTracking() {
 
       const select = document.getElementById("voiceLang");
 if (select) select.value = localStorage.lang || "de-DE";
-document.addEventListener("deviceready", () => {
-  if (cordova?.plugins?.diagnostic) {
-    cordova.plugins.diagnostic.requestLocationAuthorization(status => {
-      if (
-        status === cordova.plugins.diagnostic.permissionStatus.GRANTED ||
-        status === cordova.plugins.diagnostic.permissionStatus.GRANTED_WHEN_IN_USE
-      ) {
-        startLocationTracking();
-      } else {
-        showToast("❌ Standort nicht freigegeben");
-        document.getElementById("loader").style.display = "none";
-      }
-    }, err => {
-      console.error("Fehler bei Standortfreigabe:", err);
-      document.getElementById("loader").style.display = "none";
-    });
-  } else {
-    // Fallback wenn diagnostic-Plugin fehlt
-    startLocationTracking();
-  }
-
-  // Sicherheit: Timeout nach 12 Sekunden
-  setTimeout(() => {
-    const l = document.getElementById("loader");
-    if (l && l.style.display !== "none") {
-      l.style.display = "none";
-      showToast("⏳ Timeout");
-    }
-  }, 12000);
-});
+startGeolocation();
 
       listenGroup();
 
