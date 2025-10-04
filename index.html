@@ -1,0 +1,1137 @@
+<!DOCTYPE html><html lang="de">
+<head>
+  <!-- Vorschau für WhatsApp, Facebook, Google etc. -->
+  <meta name="google-adsense-account" content="ca-pub-2577915567428766">
+<meta property="og:title" content="🏠🚲 Tourplaner" />
+<meta property="og:description" content="Plane deine Radtour mit Hütten! Mit GPS, Tourenspeicher, Kommentaren & Abo-Verwaltung." />
+<meta property="og:image" content="https://radlmap.net/img/preview.png" />
+<meta property="og:url" content="https://radlmap.net" />
+<meta name="twitter:card" content="summary_large_image" />
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RadlMap</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body, html { margin: 0; padding: 0; font-family: system-ui, sans-serif; height: 100%; display: flex; flex-direction: column; }header {
+  position: relative;
+  background: linear-gradient(to top, #7ec8f7, #cdefff);
+  text-align: center;
+  padding: 2rem 1rem 6rem;
+  color: #fff;
+  text-shadow: 1px 1px 6px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+
+header {
+  position: relative;
+  background: linear-gradient(to top, #ffccaa, #88ccee, #ddeeff);
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #0b3d02;
+  text-shadow: 1px 1px 6px rgba(0,0,0,0.2);
+
+  overflow: hidden;   /* ✨ verhindert, dass Wolken rausstehen */
+}
+
+
+.intro {
+  background: url('https://radlmap.net/img/wiese.png') repeat-x bottom,
+              linear-gradient(to top, #a8e6a3 0%, #7ec8f7 100%);
+  background-size: contain;
+  text-align: center;
+  padding: 2rem 1rem 5rem;
+  position: relative;
+  z-index: 1;          /* sorgt dafür, dass .intro über rider etc. bleibt */
+}
+
+header {
+  z-index: 2;          /* Header bleibt sichtbar über der Intro */
+}
+
+header h1, header p {
+  position: relative;
+  z-index: 5; /* Standard über Wolken */
+margin: 0.5rem auto;
+}
+
+header {
+  position: relative;
+  background: linear-gradient(to top, #ffccaa, #88ccee, #ddeeff);
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #0b3d02;
+  text-shadow: 1px 1px 6px rgba(0,0,0,0.2);
+  overflow: visible; /* Text darf raus */
+}
+
+.clouds {
+  position: absolute;
+  inset: 0;              /* füllt den Header komplett */
+  overflow: hidden;      /* ✨ nur Clouds werden beschnitten */
+  z-index: 1;            /* hinter dem Text */
+}
+
+
+
+.cloud {
+  position: absolute;
+  top: 20px;
+  background-repeat: no-repeat;
+  background-size: contain;
+  image-rendering: pixelated;
+  opacity: 0.9;
+  animation: cloud-move linear infinite;
+}
+
+@keyframes cloud-move {
+  from { left: -200px; }
+  to { left: 110%; }
+}
+main {
+  flex: 1;
+  padding: 1rem;
+  background: transparent !important;
+}
+h2 { text-align: center; color: #0077b6; margin: 2rem 0 1rem; }
+
+.huts-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+.card {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  overflow: hidden;
+  border: 3px solid #7BBF42;
+  transition: transform .2s;
+  cursor: pointer;
+}
+.card:hover { transform: scale(1.03); }
+.card img { width: 100%; height: 180px; object-fit: cover; }
+.info { padding: 1rem; }
+.info h3 { margin: 0 0 .5rem; color: #0077b6; }
+.details { font-size: .9rem; color: #555; }
+
+/* Instagram Vorschau */
+#instagram-feed {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 8px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+#instagram-feed img {
+  width: 100%;
+  aspect-ratio: 1/1;
+  object-fit: cover;
+  border-radius: 8px;
+  transition: transform .3s;
+}
+#instagram-feed img:hover { transform: scale(1.05); }
+.insta-btn {
+  display: inline-block;
+  background: #E4405F;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: bold;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+/* Footer */
+
+
+
+
+.footer-box {
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.footer-brand {
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: #d1d5db; /* hellgrau */
+}
+
+
+.footer-links a:hover {
+  color: #d9a066;
+  transform: translateY(-1px);
+}
+
+ /*   
+.rider-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}*/
+
+
+/* Mobile Anpassung */
+@media (max-width: 768px) {
+  .footer-box {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+  }
+  .footer-links a {
+    font-size: 0.75rem;
+    margin: 0.15rem 0.2rem;
+  }
+  footer .rider {
+    max-width: 50px;
+  }
+}
+
+
+
+@keyframes ride {
+  from { left: -120px; }
+  to { left: 110%; }
+}
+
+/* Popup */
+#hut-popup {
+  display: none;
+  flex-direction: column;
+  justify-content: flex-end;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 5000;
+}
+#hut-popup-content {
+  background: white;
+  border-radius: 1rem 1rem 0 0;
+  padding: 1rem;
+  max-width: 500px;
+  width: 100%;
+  margin: auto;
+  transform: translateY(100%);
+  transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  position: relative;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+#hut-popup-close {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  padding: 8px;
+  font-size: 1.5rem;
+  cursor: pointer;
+  z-index: 10;
+  text-align: right;
+  display: block;
+}
+#popup-beschreibung {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: #333;
+  margin: 0.5rem 0 1rem;
+  white-space: normal;
+  word-break: break-word;
+}
+#popup-beschreibung a {
+  color: #0077b6;
+  text-decoration: underline;
+}
+/* Mobile Anpassung Popup */
+@media (max-width: 768px) {
+  #hut-popup-content {
+    border-radius: 0;
+    max-width: 100%;
+    height: 100%;
+    transform: translateY(100%);
+  }
+}
+/* Features nebeneinander & kleiner */
+.features {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: nowrap; /* nicht umbrechen */
+}
+/*.feature {
+  max-width: 120px;
+}*/
+    /* Features: abwechselnd Z-Ebenen */
+.feature {
+  position: relative;
+  z-index: 5; /* Standard hinten */
+}
+.feature:nth-child(even) {
+  z-index: 20; /* jedes 2. vorne */
+}
+.feature img {
+  width: 50px; /* kleinere Icons */
+  margin-bottom: 0.3rem;
+}
+
+/* Braune Linie entfernen */
+.navbar {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: #293040;
+  padding: 14px;
+  border: none; /* Linie weg */
+}
+
+/* Radfahrer im Intro auf den Weg setzen */
+/* Intro-Bereich */
+/* Flexibler Wert für die Höhe der Radler */
+:root {
+  --rider-offset: -1px; /* Reifen-Abstand vom unteren Rand des Intro-Bereichs */
+}
+
+.intro {
+  position: relative;
+  background: url('https://radlmap.net/img/wiese.png') repeat-x bottom,
+              linear-gradient(to top, #a8e6a3 0%, #7ec8f7 100%);
+  background-size: contain;
+  text-align: center;
+  padding: 2rem 1rem 5rem;
+  overflow: hidden;
+}
+
+/* Container für die Radler */
+.intro .rider-container {
+  position: absolute;
+  left: 0;
+  bottom: var(--rider-offset); /* nur diesen Wert anpassen */
+  width: 100%;
+  height: 80px;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Radler */
+.rider {
+  position: absolute;
+  bottom: 0;
+  width: 60px;
+  height: 60px;
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+  animation: ride linear infinite;
+  image-rendering: pixelated;
+}
+.navbar button {
+  font-family: monospace, sans-serif;
+  background: #fff;
+  color: #333;
+  padding: 10px 16px;
+  border: 3px solid #333;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 3px 3px 0px #333;
+  transition: transform 0.2s, background 0.3s;
+}
+
+.navbar button:hover {
+  background: #0077b6;
+  color: #fff;
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0px #222;
+}
+
+.navbar button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px #000;
+}
+#footer-popup {
+  display: none;
+  flex-direction: column;
+  justify-content: flex-end;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 5000;
+}
+
+#footer-popup-content {
+  background: white;
+  border-radius: 1rem 1rem 0 0;
+  padding: 1rem;
+  max-width: 500px;
+  width: 100%;
+  margin: auto;
+  transform: translateY(100%);
+  transition: transform 0.4s cubic-bezier(0.25,0.8,0.25,1);
+  position: relative;
+  max-height: 90vh;
+  overflow: hidden;
+}
+
+#footer-popup iframe {
+  width: 100%;
+  height: 80vh;
+  border: none;
+}
+
+body.popup-open { overflow: hidden; }
+    
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out;
+}
+    .tiere {
+  margin: 6px 0;
+  font-size: 1.3rem;
+}
+
+.tags {
+  margin: 4px 0;
+}
+
+.tag {
+  background: #eef;
+  color: #225;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  margin-right: 4px;
+  display: inline-block;
+}
+
+.beschreibung {
+  font-size: 0.9rem;
+  margin: 6px 0;
+  color: #444;
+}
+    .map-preview {
+  width: 100%;
+  height: 180px;
+  margin-top: 8px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.oeffnungszeiten-list {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: #333;
+}
+
+
+
+    
+header h1 {
+  font-size: 2rem;
+  margin: 0.5rem 0;
+}
+header p {
+  font-size: 1rem;
+}
+
+.cloud { transform: scale(0.3); } /* Wolken viel kleiner */
+
+
+
+.feature p {
+  font-weight: bold;
+  color: #333;
+}
+    footer {
+  background: linear-gradient(to right, #293045, #293040);
+  color: #fff; /* Standardfarbe weiß */
+  padding: 2rem 1rem;
+  text-align: center;
+  border-top: 5px solid #7B3F00;
+  font-family: "Courier New", monospace;
+}
+
+.footer-box p, 
+.footer-links a {
+  color: #fff; /* Links und Text auch weiß */
+}
+
+.footer-links a:hover {
+  color: #d9a066; /* beim Hover bleibt ein Kontrast */
+  transform: translateY(-1px);
+}
+  </style>
+</head>
+<body>
+  <header>
+  <div class="clouds">
+    <!-- Clouds werden per JS hier eingefügt -->
+  </div>
+  <h1>Deine Radl-Tour zur Natur</h1>
+  <p>Finde Eierhütten, Bastelhütten, Hoflädchen & Selbstbedienungsläden direkt auf deiner Route!</p>
+  </header>
+
+<section class="intro">
+  <div class="features">
+    <div class="feature">
+      <img src="https://radlmap.net/img/icons/radwege.jpg" alt="">
+      <p>Radwege entdecken</p>
+    </div>
+    <div class="feature">
+      <img src="https://radlmap.net/img/icons/shop.jpg" alt="">
+      <p>Regional shoppen</p>
+    </div>
+    <div class="feature">
+      <img src="https://radlmap.net/img/icons/nachhaltig.jpg" alt="">
+      <p>Nachhaltig laden</p>
+    </div>
+    <div class="feature">
+      <img src="https://radlmap.net/img/icons/abenteuer.jpg" alt="">
+      <p>Abenteuer erleben</p>
+    </div>
+  </div>
+
+  <!-- Radfahrer laufen über die ganze Breite -->
+  <div class="rider-container"></div>
+</section>
+  <div class="navbar">
+  <button onclick="location.href='https://radlmap.net/navi.html'">🚲 Zur RadlMap</button>
+  <button onclick="location.href='https://radlmap.net/assistent.html'">➕ Neue Hütte eintragen</button>
+  <button onclick="location.href='https://www.kickstarter.com/projects/radlmap/radlmap-die-fahrrad-app-fur-touren-mit-eierhutten-stopps'">💚 Kickstarter unterstützen</button>
+  <button onclick="location.href='https://buymeacoffee.com/radlmap'">💚☕️ Oder direkte Unterstützung</button>
+
+  </div>
+  <main>
+  <h2>So funktioniert RadlMap</h2>
+  <p style="max-width:700px; margin:0 auto; text-align:center;">
+    Mit RadlMap findest du regionale Eierhütten, Hofläden und Fahrradstopps in deiner Nähe. 
+    Plane deine Fahrradtouren, entdecke neue Orte und genieße deine Pausen unterwegs.
+  </p>
+
+
+
+  <h2>Unsere neuesten Hütten</h2>
+  <div class="huts-container" id="huts-container"></div>
+
+    <div id="adsense-container" style="margin:20px auto; text-align:center; display:none;">
+  <ins class="adsbygoogle"
+       style="display:block"
+       data-ad-client="ca-pub-2577915567428766"
+       data-ad-slot="3060614235"
+       data-ad-format="auto"
+       data-full-width-responsive="true"></ins>
+    </div>
+  
+
+    
+
+  <h2>Instagram News</h2>
+  <div style="max-width:600px; margin:0 auto; text-align:center;">
+    <blockquote 
+      class="instagram-media" 
+      data-instgrm-permalink="https://www.instagram.com/radlmap/" 
+      data-instgrm-version="14"
+      style="margin:auto; width:100%; max-width:540px; background:#fff; border-radius:12px;">
+    </blockquote>
+  </div>
+
+  <script async src="https://www.instagram.com/embed.js"></script>
+</main>
+
+
+  <!-- Popup -->
+<div id="hut-popup">
+  <div id="hut-popup-content">
+    <span id="hut-popup-close">✖</span>
+    
+    <!-- Name -->
+    <h3 id="popup-name"></h3>
+    
+    <!-- Bilder Slideshow -->
+    <div class="popup-image-container" id="popup-images"></div>
+    
+    <!-- Karte -->
+    <div id="popup-map" style="height:200px; border-radius:1rem; margin:1rem 0;"></div>
+    <a id="popup-route" href="#" target="_blank" style="display:inline-block; margin-bottom:1rem; color:#007bff; text-decoration:underline;">📍 Route planen</a>
+    
+    <!-- Beschreibung -->
+    <p id="popup-beschreibung" style="margin-bottom:1rem;"></p>
+    
+    <!-- Öffnungszeiten -->
+    <div>
+      <b>Öffnungszeiten:</b>
+      <div id="popup-oeffnungszeiten"></div>
+    </div>
+    
+    <!-- Details -->
+    <p><b>Strom:</b> <span id="popup-strom"></span></p>
+    <p><b>Sitzplätze:</b> <span id="popup-sitzplaetze"></span></p>
+    <p><b>Extras:</b> <span id="popup-extras"></span></p>
+    <p><b>Start:</b> <span id="popup-start"></span></p>
+    
+    <!-- Tiere -->
+    <div id="popup-tiere" style="margin:0.5rem 0; font-size:1.3rem;"></div>
+    
+    <!-- Tags -->
+    <div id="popup-tags" style="margin:0.5rem 0;"></div>
+  </div>
+</div>
+  
+ <footer>
+  <div class="footer-box">
+    <p class="footer-brand">© 2025 <strong>RadlMap</strong> · Mit dem Fahrrad die Region entdecken</p>
+    <nav class="footer-links">
+      <a href="javascript:void(0)" onclick="openFooterPopup('ueber')">Über</a>
+      <a href="javascript:void(0)" onclick="openFooterPopup('datenschutz')">Datenschutz</a>
+      <a href="javascript:void(0)" onclick="openFooterPopup('abo')">Abo</a>
+      <a href="javascript:void(0)" onclick="openFooterPopup('rechtliches')">Rechtliches</a>
+      <a href="javascript:void(0)" onclick="openFooterPopup('kontakt')">Kontakt</a>
+    </nav>
+  </div>
+</footer>
+
+<div id="footer-popup">
+  <div id="footer-popup-content">
+    <span id="footer-popup-close">✖</span>
+    <iframe id="footer-popup-iframe" src="" frameborder="0"></iframe>
+  </div>
+</div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script>
+// Firebase Setup
+const firebaseConfig = {
+  apiKey: "AIzaSyAu39z49KEJy9zso-etFIScmaFnWw8vhro",
+  authDomain: "eierhuettentour.firebaseapp.com",
+  projectId: "eierhuettentour",
+  storageBucket: "eierhuettentour.appspot.com",
+  messagingSenderId: "348272135205",
+  appId: "1:348272135205:web:f39a7d26d927fbf28dc3cc",
+  measurementId: "G-16V6K5GXDT"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Array mit Beispielbildern
+
+
+// Hütten laden (3 neueste, nur angenommene)
+const container = document.getElementById("huts-container");
+db.collection("eierhuetten")
+  .where("status", "==", "angenommen")   // ✅ nur fertige/angenommene
+  .orderBy("erstelltAm", "desc")
+  .limit(3)
+  .onSnapshot(snap => {
+    container.innerHTML = "";
+    let index = 1;
+
+    snap.forEach(doc => {
+      const d = doc.data();
+
+      // Pflichtfelder (Name + Location) checken
+      if (!d.name || !d.location?.latitude || !d.location?.longitude) {
+        console.warn("Übersprungen (unvollständig):", doc.id);
+        return;
+      }
+
+      // Bilder (Fallback)
+      const bilderUrls = (d.fotos || [])
+        .map(f => (typeof f === "string" ? f : f.url))
+        .filter(Boolean);
+      
+      // Öffnungszeiten (Map oder Array möglich)
+      let oeffnungszeitenHTML = "-";
+      if (d.immerGeoeffnet === true) {
+        oeffnungszeitenHTML = "Immer geöffnet ✅";
+      } else if (Array.isArray(d.oeffnungszeiten) && d.oeffnungszeiten.length > 0) {
+        oeffnungszeitenHTML = "<ul class='oeffnungszeiten-list'>" +
+          d.oeffnungszeiten
+            .map(e => `<li>${e.tag}: ${e.von} - ${e.bis}</li>`)
+            .join("") +
+          "</ul>";
+      } else if (typeof d.oeffnungszeiten === "object" && d.oeffnungszeiten !== null) {
+        const tage = Object.entries(d.oeffnungszeiten);
+        if (tage.length > 0) {
+          oeffnungszeitenHTML = "<ul class='oeffnungszeiten-list'>" +
+            tage.map(([tag, val]) =>
+              `<li>${tag}: ${(val.start || "–")} - ${(val.ende || "–")}</li>`
+            ).join("") +
+            "</ul>";
+        }
+      }
+
+      // Tiere
+      const tiereHTML = Array.isArray(d.tiere) && d.tiere.length > 0
+        ? `<div class="tiere">🐾 ${d.tiere.join(" ")}</div>` : "";
+
+      // Tags
+      const tagsHTML = Array.isArray(d.tags) && d.tags.length > 0
+        ? `<div class="tags">${d.tags.map(t => `<span class="tag">#${t}</span>`).join(" ")}</div>` : "";
+
+      // Beschreibung
+      const beschr = d.beschreibung
+        ? `<p class="beschreibung">${
+            d.beschreibung.length > 120
+              ? d.beschreibung.substring(0, 120) + "..."
+              : d.beschreibung
+          }</p>` : "";
+
+         // Karte-Card
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+          <div id="slideshow-${doc.id}" class="slideshow-container" style="margin-bottom:0.5rem;"></div>
+        <div class="info">
+          <h3>${index}. ${d.name}</h3>
+          ${beschr}
+          ${tiereHTML}
+          ${tagsHTML}
+          <div class="details">
+            <b>Öffnungszeiten:</b> ${oeffnungszeitenHTML}<br>
+            <b>Strom:</b> ${d.strom === "Ja" ? "⚡ Ja" : "❌ Nein"}<br>
+            <b>Sitzplätze:</b> ${d.sitzplaetze === "Ja" ? "✅ Ja" : "❌ Nein"}<br>
+            <b>Extras:</b> ${d.extras || "–"}<br>
+            <p>📅 <b>Eingetragen:</b> ${d.datenschutzZustimmung?.erstelltAm?.toDate?.().toLocaleDateString("de-DE") || "-"}</p>
+          </div>
+          <div class="map-preview" id="map-${doc.id}"></div>
+        </div>
+      `;
+      //card.onclick = () => openHutPopup(d, bilderUrls);
+      container.appendChild(card);
+      index++;
+startSlideshow(`slideshow-${doc.id}`, bilderUrls);
+      // Leaflet-Karte
+      setTimeout(() => {
+        const map = L.map(`map-${doc.id}`, {
+          zoomControl: false,
+          attributionControl: false,
+          dragging: false,
+          scrollWheelZoom: false,
+          doubleClickZoom: false,
+          boxZoom: false,
+          keyboard: false,
+        }).setView([d.location.latitude, d.location.longitude], 14);
+
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+        L.marker([d.location.latitude, d.location.longitude]).addTo(map);
+
+        setTimeout(() => map.invalidateSize(), 200);
+      }, 300);
+    });
+  });
+// Popup Funktionen
+function startSlideshow(containerId, bilderUrls) {
+  const container = document.getElementById(containerId);
+  const noImgArray = [
+    "https://radlmap.net/img/noimg/1.jpg",
+    "https://radlmap.net/img/noimg/2.jpg",
+    "https://radlmap.net/img/noimg/3.jpg",
+    "https://radlmap.net/img/noimg/4.jpg"
+  ];
+
+  if (!container || !bilderUrls || bilderUrls.length === 0) {
+    if (container) {
+      container.innerHTML = `<img src="${noImgArray[Math.floor(Math.random() * noImgArray.length)]}" 
+             style="width:100%; height:100%; object-fit:cover; border-radius:4px; image-rendering:pixelated;">`;
+    }
+    return;
+  }
+
+  let index = 0;
+
+  // Wrapper erstellen
+  container.innerHTML = `
+    <div style="position:relative; width:100%; height:40vh; overflow:hidden; border-radius:12px; box-shadow:6px 6px 0px #555;">
+      <img id="${containerId}-slideshow-img" 
+           src="${bilderUrls[0]}" 
+           style="width:100%; height:100%; object-fit:cover; image-rendering:pixelated; transition:opacity 0.6s ease;">
+      <div id="${containerId}-dots" 
+           style="position:absolute; bottom:8px; width:100%; text-align:center;"></div>
+    </div>
+  `;
+
+  const imgEl = document.getElementById(`${containerId}-slideshow-img`);
+  const dotsEl = document.getElementById(`${containerId}-dots`);
+
+  // Punkte erzeugen
+  dotsEl.innerHTML = bilderUrls.map((_, i) => `
+    <span style="
+      display:inline-block; 
+      width:10px; 
+      height:10px; 
+      margin:0 4px; 
+      border-radius:50%; 
+      background:${i === 0 ? "#fff" : "#777"}; 
+      cursor:pointer;
+    " data-index="${i}"></span>
+  `).join("");
+
+  function updateImage() {
+    imgEl.style.opacity = 0;
+    setTimeout(() => {
+      imgEl.src = bilderUrls[index];
+      imgEl.style.opacity = 1;
+
+      // Punkte aktualisieren
+      [...dotsEl.children].forEach((dot, i) => {
+        dot.style.background = i === index ? "#fff" : "#777";
+      });
+    }, 300);
+  }
+
+  // Klick auf Punkte erlaubt manuelles Umschalten
+  dotsEl.addEventListener("click", (e) => {
+    if (e.target.dataset.index !== undefined) {
+      index = parseInt(e.target.dataset.index, 10);
+      updateImage();
+    }
+  });
+
+  // Automatischer Wechsel
+  if (bilderUrls.length > 1) {
+    setInterval(() => {
+      index = (index + 1) % bilderUrls.length;
+      updateImage();
+    }, 4000);
+  }
+}
+
+function linkify(text) {
+  if (!text) return "";
+  return text.replace(
+    /(https?:\/\/[^\s]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+  );
+}
+
+function openHutPopup(d, bilderUrls) {
+  const popup = document.getElementById("hut-popup");
+  const content = document.getElementById("hut-popup-content");
+  popup.style.display = "flex";
+  setTimeout(() => { content.style.transform = "translateY(0)"; }, 50);
+
+  // Name
+  document.getElementById("popup-name").textContent = d.name || "Unbenannt";
+
+  // Beschreibung + Links + Umbrüche
+  const beschr = d.beschreibung || "";
+  document.getElementById("popup-beschreibung").innerHTML = linkify(beschr).replace(/\n/g, "<br>");
+
+  // Öffnungszeiten
+  let oeffnungszeitenHTML = "-";
+  if (d.immerGeoeffnet === true) {
+    oeffnungszeitenHTML = "Immer geöffnet ✅";
+  } else if (Array.isArray(d.oeffnungszeiten) && d.oeffnungszeiten.length > 0) {
+    oeffnungszeitenHTML =
+      "<ul class='oeffnungszeiten-list'>" +
+      d.oeffnungszeiten.map(e => `<li>${e.tag}: ${e.von} - ${e.bis}</li>`).join("") +
+      "</ul>";
+  }
+  document.getElementById("popup-oeffnungszeiten").innerHTML = oeffnungszeitenHTML;
+
+  // Strom, Sitzplätze, Extras, Start
+  document.getElementById("popup-strom").textContent = d.strom === "Ja" ? "✅ Ja" : "❌ Nein";
+  document.getElementById("popup-sitzplaetze").textContent = d.sitzplaetze === "Ja" ? "✅ Ja" : "❌ Nein";
+  document.getElementById("popup-extras").textContent = d.extras || "–";
+  document.getElementById("popup-start").textContent =
+    d.aboStart?.toDate?.().toLocaleDateString("de-DE") || "-";
+
+  // Tiere
+  const tiereContainer = document.getElementById("popup-tiere");
+  if (Array.isArray(d.tiere) && d.tiere.length > 0) {
+    tiereContainer.innerHTML = "🐾 " + d.tiere.join(" ");
+  } else {
+    tiereContainer.innerHTML = "🐾 Keine Tiere";
+  }
+
+  // Tags
+  const tagsContainer = document.getElementById("popup-tags");
+  if (Array.isArray(d.tags) && d.tags.length > 0) {
+    tagsContainer.innerHTML = d.tags.map(t => `<span class="tag">#${t}</span>`).join(" ");
+  } else {
+    tagsContainer.innerHTML = "";
+  }
+
+  // Slideshow Bilder
+  //renderSlideshow(document.getElementById("popup-images"), bilderUrls);
+//renderSlideshow(document.getElementById(`slideshow-${doc.id}`), bilderUrls);
+  renderSlideshow(document.getElementById("popup-images"), bilderUrls);
+  // Karte
+  const mapContainer = document.getElementById("popup-map");
+  mapContainer.innerHTML = "";
+  if (d.location?.latitude && d.location?.longitude) {
+    setTimeout(() => {
+      const map = L.map("popup-map", {
+        zoomControl: true,
+        attributionControl: true,
+        dragging: true,
+        scrollWheelZoom: true,
+        doubleClickZoom: true,
+        boxZoom: true,
+        keyboard: true
+      }).setView([d.location.latitude, d.location.longitude], 15);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+      L.marker([d.location.latitude, d.location.longitude]).addTo(map);
+
+      setTimeout(() => map.invalidateSize(), 200);
+    }, 200);
+  }
+    }
+  
+
+function closeHutPopup() {
+  const popup = document.getElementById("hut-popup");
+  const content = document.getElementById("hut-popup-content");
+  content.style.transform = "translateY(100%)";
+  setTimeout(() => { popup.style.display = "none"; }, 400);
+}
+
+// Close Events
+ document.getElementById("hut-popup-close").onclick = closeHutPopup;
+ document.getElementById("hut-popup").onclick = e => { if (e.target.id === "hut-popup") closeHutPopup(); };
+
+
+/* Wolken animieren */
+const cloudShapes = ["https://radlmap.net/img/cloud1.png","https://radlmap.net/img/cloud2.png","https://radlmap.net/img/cloud3.png"];
+for (let i = 0; i < 6; i++) {
+  const cloud = document.createElement("div");
+  cloud.className = "cloud";
+
+  const size = 60 + Math.random()*100;
+  cloud.style.width = size + "px";
+  cloud.style.height = size * 0.6 + "px";
+  cloud.style.top = Math.random() * 100 + "px";
+  cloud.style.left = "-200px";
+  cloud.style.backgroundImage = `url(${cloudShapes[Math.floor(Math.random()*cloudShapes.length)]})`;
+  cloud.style.animationDuration = 30 + Math.random()*40 + "s";
+  cloud.style.animationDelay = (-Math.random()*40) + "s";
+
+  // NEU: Wolken mal vor, mal hinter der Schrift
+  cloud.style.zIndex = Math.random() > 0.5 ? "10" : "1";
+document.querySelector(".clouds").appendChild(cloud);
+ // document.querySelector("header").appendChild(cloud);
+    }
+
+// Radfahrer animieren
+const riderSprites = ["https://radlmap.net/img/radler1.png","https://radlmap.net/img/radler2.png","https://radlmap.net/img/radler3.png"];
+for (let i = 0; i < 6; i++) {
+  const rider = document.createElement("div");
+  rider.className = "rider";
+
+  // Größe zwischen 50–80px (nicht mehr so extrem)
+  const size = 50 + Math.random()*30;
+  rider.style.width = size + "px";
+  rider.style.height = size + "px";
+  rider.style.backgroundImage = `url(${riderSprites[Math.floor(Math.random()*riderSprites.length)]})`;
+
+  // Animation
+  rider.style.animationDuration = 12 + Math.random()*10 + "s";
+  rider.style.animationDelay = (-Math.random()*15) + "s";
+
+  // Tiefer & vorne, wenn groß | höher & hinten, wenn klein
+  if (size > 65) {
+    rider.style.bottom = "5px";   // näher am Boden
+    rider.style.zIndex = 20;       // ganz vorne
+  } else {
+    rider.style.bottom = "10px";   // etwas höher
+    rider.style.zIndex = 5;        // weiter hinten
+    rider.style.opacity = 0.8;     // leicht transparenter
+  }
+
+  //document.querySelector("footer").appendChild(rider);
+  document.querySelector(".rider-container").appendChild(rider);
+}
+
+
+function openFooterPopup(page) {
+  const popup = document.getElementById("footer-popup");
+  const content = document.getElementById("footer-popup-content");
+  const iframe = document.getElementById("footer-popup-iframe");
+
+  iframe.src = page + ".html"; // iframe lädt die Seite separat
+  popup.style.display = "flex";
+  setTimeout(() => { content.style.transform = "translateY(0)"; }, 50);
+}
+function closeFooterPopup() {
+    const popup = document.getElementById("footer-popup");
+  const content = document.getElementById("footer-popup-content");
+  const iframe = document.getElementById("footer-popup-iframe");
+  content.style.transform = "translateY(100%)";
+  setTimeout(() => { 
+    popup.style.display = "none"; 
+    iframe.src = ""; // iframe leeren
+  }, 400);
+}
+
+// Close Events
+ document.getElementById("footer-popup-close").onclick = closeFooterPopup;
+ document.getElementById("footer-popup").onclick = e => { if (e.target.id === "footer-popup") closeFooterPopup(); };
+
+
+//Google Ads
+function loadAdsense(consent) {
+  if (!consent.marketing) return; // nur bei Zustimmung
+
+  // Script einfügen, falls noch nicht geladen
+  if (!window.adsenseLoaded) {
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js";
+    document.head.appendChild(script);
+    window.adsenseLoaded = true;
+  }
+
+  // Anzeigen sichtbar machen
+  const container = document.getElementById('adsense-container');
+  if (container) {
+    container.style.display = "block";
+    (adsbygoogle = window.adsbygoogle || []).push({});
+  }
+}
+
+
+    async function saveConsentToFirestore(consentData, userId) {
+  try {
+    await firebase.firestore().collection("consents").add({
+      userId: userId || null,       // falls du eine User-ID hast, sonst null
+      consentData: consentData,     // das ganze Consent-Objekt
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    console.log("Consent gespeichert ✅");
+  } catch (error) {
+    console.error("Fehler beim Speichern des Consents:", error);
+  }
+}
+function showConsentModal() {
+  document.getElementById("consent-modal").classList.remove("hidden");
+}
+
+function acceptConsent() {
+  const consentData = {
+    necessary: true,
+    stats: document.getElementById("consent-stats").checked,
+    marketing: document.getElementById("consent-marketing").checked,
+    date: new Date().toISOString()
+  };
+  localStorage.setItem("userConsent", JSON.stringify(consentData));
+  localStorage.setItem("consentGiven", "true");
+  document.getElementById("consent-modal").classList.add("hidden");
+  loadTrackingScripts(consentData);
+  
+  if (!localStorage.getItem("browserId")) {
+  localStorage.setItem("browserId", crypto.randomUUID());
+}
+const browserId = localStorage.getItem("browserId");
+
+saveConsentToFirestore(consentData, browserId);
+    loadAdsense(consentData);
+}
+
+function rejectConsent() {
+  const consentData = {
+    necessary: true,
+    stats: false,
+    marketing: false,
+    date: new Date().toISOString()
+  };
+  localStorage.setItem("userConsent", JSON.stringify(consentData));
+  localStorage.setItem("consentGiven", "true");
+  document.getElementById("consent-modal").classList.add("hidden");
+  
+    loadAdsense(consentData);
+}
+
+function loadTrackingScripts(consent) {
+  if (consent.stats) {
+    // Google Analytics laden
+    const gaScript = document.createElement('script');
+    gaScript.src = "https://www.googletagmanager.com/gtag/js?id=G-16V6K5GXDT";
+    gaScript.async = true;
+    document.head.appendChild(gaScript);
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-16V6K5GXDT');
+  }
+
+  if (consent.marketing) {
+    // Google Ads / Facebook Pixel etc.
+    const fbScript = document.createElement('script');
+    fbScript.src = "https://connect.facebook.net/en_US/fbevents.js";
+    fbScript.async = true;
+    document.head.appendChild(fbScript);
+  }
+  
+    loadAdsense(consent);
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const consentGiven = localStorage.getItem("consentGiven");
+  if (consentGiven === "true") {
+    const data = JSON.parse(localStorage.getItem("userConsent"));
+    loadTrackingScripts(data);
+  } else {
+    showConsentModal();
+  }
+});
+
+
+
+
+</script>
+
+
+<!-- Consent Modal -->
+<div id="consent-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl shadow-xl p-6 max-w-md w-full animate-fadeIn">
+    
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-4">
+      <div class="bg-green-100 text-green-600 p-2 rounded-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <h2 class="text-xl font-semibold text-gray-800">Datenschutz & Cookies</h2>
+    </div>
+
+    <!-- Info -->
+    <p class="text-gray-600 text-sm mb-5">
+      Wir verwenden Cookies, um unsere Dienste zu verbessern. 
+      Details findest du in unserer 
+      <a href="/datenschutz.html" target="_blank" class="text-green-600 hover:underline font-medium">Datenschutzerklärung</a>.
+    </p>
+
+    <!-- Optionen -->
+    <div class="space-y-3">
+      <label class="flex items-center gap-2 p-2 border border-gray-200 rounded-lg bg-gray-50">
+        <input type="checkbox" checked disabled>
+        <span class="text-gray-700 font-medium">Notwendige Cookies (immer aktiv)</span>
+      </label>
+      <label class="flex items-center gap-2 p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+        <input type="checkbox" id="consent-stats">
+        <span class="text-gray-700">Statistik (z. B. Google Analytics)</span>
+      </label>
+      <label class="flex items-center gap-2 p-2 border border-gray-200 rounded-lg hover:bg-gray-50">
+        <input type="checkbox" id="consent-marketing">
+        <span class="text-gray-700">Marketing (z. B. Google Ads, Facebook Pixel)</span>
+      </label>
+    </div>
+
+    <!-- Buttons -->
+    <div class="flex justify-end gap-2 mt-6">
+      <button onclick="rejectConsent()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition">
+        Nur notwendig
+      </button>
+      <button onclick="acceptConsent()" class="px-4 py-2 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700 transition">
+        Alle akzeptieren
+      </button>
+    </div>
+  </div>
+</div>
+
+
+</body>
+  </html>

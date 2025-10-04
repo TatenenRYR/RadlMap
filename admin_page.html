@@ -1,0 +1,2427 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hütten Admin-Dashboard</title>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script src="https://www.paypal.com/sdk/js?client-id=AbnXzFW_R-XwHEQCBVth0OY1zkq3Rl0Op-bqTcbmvAlbQqgh45zAWtkmuWiNp4dF7ijTW4vs90Ec7gyG&vault=true&intent=subscription" data-sdk-integration-source="button-factory"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .minimap { height: 200px; width: 100%; border-radius: 0.5rem; margin-top: 0.5rem; }
+    .progress-bar { width: 100%; background-color: #e5e7eb; border-radius: 0.5rem; margin-top: 5px; }
+    .progress-fill { height: 8px; background-color: #10b981; border-radius: 0.5rem; width: 0%; transition: width 0.3s; }
+    #notification { position: fixed; top: 1rem; right: 1rem; background: #38bdf8; color: white; padding: 1rem; border-radius: 0.5rem; display: none; z-index: 9999; max-width: 300px; }
+  .nav-btn {
+  @apply text-left px-3 py-2 rounded hover:bg-green-50 transition;
+}
+.nav-btn.active {
+  @apply bg-green-100 text-green-800 font-semibold;
+}
+.section-title {
+  @apply text-2xl font-bold mb-4 border-b pb-2;
+}
+.dash-section {
+  @apply space-y-4;
+}
+  
+  
+  </style>
+</head>
+
+<body class="bg-gray-100">
+  <div id="notification"></div>
+
+  <!-- Login bleibt wie gehabt -->
+  <div id="login-section" class="flex items-center justify-center h-screen">
+    <button id="login-btn"
+      class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded">
+      Admin Login mit Google
+    </button>
+  </div>
+
+  <!-- Dashboard -->
+  <!-- Dashboard-Wrapper: jetzt mobilfreundlich -->
+  <div id="dashboard" class="hidden min-h-screen flex flex-col md:flex-row">
+    <!-- Nur auf Mobile sichtbar -->
+<button id="menu-toggle"
+        class="md:hidden p-2 text-gray-700 border rounded">
+  ☰ Menü
+</button>
+  <!-- 🟦 Sidebar -->
+    <aside id="sidebar" class="w-full md:w-64 bg-white shadow-md md:block hidden md:flex-shrink-0">
+      <div class="p-4 border-b">
+        <h1 class="text-xl font-bold text-green-700">🏘 Hütten Admin</h1>
+      </div>
+      <nav class="p-4 space-y-1">
+        <button class="nav-btn w-full" onclick="showSection('overview')">📊 Übersicht</button>
+        <button class="nav-btn w-full" onclick="showSection('huts')">🏠 Hüttenliste</button>
+        <button class="nav-btn w-full" onclick="showSection('support')">📨 Support-Tickets</button>
+        <button class="nav-btn w-full" onclick="showSection('profiles')">👤 Profile</button>
+        <button class="nav-btn w-full" onclick="showSection('titles')">👑 Titel</button>
+        <button class="nav-btn w-full" onclick="showSection('badges')">🏅 Abzeichen</button>
+      </nav>
+    </aside>
+
+    <!-- 🟩 Hauptbereich -->
+    <main class="flex-1 p-6 space-y-8 overflow-y-auto">
+      <!-- einzelne Sektionen -->
+      <section id="overview" class="dash-section">
+        <h2 class="section-title">📊 Übersicht</h2>
+        <div id="stats" class="text-gray-700"></div>
+        <!-- Stats + Diagramm -->
+<div id="statsContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6"></div>
+<canvas id="statsChart" class="bg-white rounded shadow p-4 mt-6"></canvas>
+        <h2 class="section-title">🆕 Neue Eintragungen</h2>
+        <div id="neueListe" class="space-y-2 bg-gray-50 p-4 rounded shadow"></div>
+
+       <h2 class="section-title">📷 Fotos warten auf Freigabe</h2>
+        <div id="pending-fotos" class="space-y-2 bg-gray-50 p-4 rounded shadow"></div>
+      </section>
+
+      <section id="huts" class="dash-section hidden">
+        <h2 class="section-title">🏠 Alle Hütten</h2>
+        <div class="flex items-center gap-2 mb-4">
+          <select id="sortSelect" class="p-2 border rounded">
+            <option value="name">🔤 Nach Name</option>
+            <option value="createdAt">🕒 Neueste zuerst</option>
+          </select>
+          <input id="search-input" placeholder="🔍 Suchen..." class="p-2 border rounded w-full">
+        </div>
+        <div id="hut-list" class="space-y-4"></div>
+        <div id="pagination" class="mt-4 flex flex-wrap justify-center gap-2"></div>
+      </section>
+
+      <section id="support" class="dash-section hidden">
+        <h2 class="section-title">📨 Support-Tickets</h2>
+        <div class="overflow-auto bg-white rounded shadow">
+          <table class="min-w-full text-sm">
+            <thead class="bg-blue-100 text-left">
+              <tr>
+                <th class="px-4 py-2">Datum</th>
+                <th class="px-4 py-2">User</th>
+                <th class="px-4 py-2">Nachricht</th>
+                <th class="px-4 py-2">Status</th>
+                <th class="px-4 py-2">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody id="support-tickets-body" class="divide-y divide-gray-200"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="profiles" class="dash-section hidden">
+        <h2 class="section-title">👤 Profile Verwaltung</h2>
+        <!-- Profile Verwaltung -->
+<h2 class="text-2xl font-bold mt-10 mb-4 text-purple-700">👤 Profile Verwaltung</h2>
+<div class="bg-white p-4 rounded shadow space-y-3">
+  <div class="relative">
+<input id="profile-search" type="text" class="w-full border p-2 rounded" placeholder="Profil suchen..." />
+<input type="hidden" id="profile-selected-id">
+<div id="profile-suggestions" class="absolute bg-white border w-full mt-1 rounded shadow hidden"></div>
+  </div>
+
+
+  <div id="profile-admin-area" class="hidden space-y-4">
+    <div class="flex items-center space-x-4">
+      <img id="profile-pic-admin" class="w-24 h-24 rounded-full border" />
+      <input id="profile-pic-url" class="flex-1 border p-2 rounded" placeholder="Profilbild-URL ändern..." />
+    </div>
+
+    <input id="profile-name-admin" class="w-full border p-2 rounded" placeholder="Name" />
+    <textarea id="profile-bio-admin" class="w-full border p-2 rounded" placeholder="Kurzbeschreibung / Bio"></textarea>
+
+    <label class="block font-bold">Titel</label>
+    <select id="profile-title-admin" class="w-full border p-2 rounded"></select>
+
+    <label class="block font-bold">Abzeichen</label>
+    <div id="profile-badges-admin" class="flex flex-wrap gap-2"></div>
+
+    <label class="block font-bold">Rolle</label>
+    <select id="profile-role-admin" class="w-full border p-2 rounded">
+      <option value="user">👤 User</option>
+      <option value="admin">👑 Admin</option>
+      <option value="mod">🛡️ Moderator</option>
+    </select>
+
+    <label class="inline-flex items-center space-x-2">
+      <input id="profile-banned-admin" type="checkbox" class="form-checkbox">
+      <span>🚫 Account gesperrt</span>
+    </label>
+
+    <div class="text-sm text-gray-600" id="profile-stats"></div>
+
+    <div class="flex space-x-2">
+      <button onclick="saveProfileAdmin()" class="bg-green-600 text-white px-3 py-1 rounded">💾 Speichern</button>
+      <button onclick="deleteProfileAdmin()" class="bg-red-600 text-white px-3 py-1 rounded">🗑️ Löschen</button>
+      <button onclick="openProfileLink()" class="bg-purple-600 text-white px-3 py-1 rounded">🔗 Öffnen</button>
+    </div>
+  </div>
+</div>
+
+
+      </section>
+
+      <section id="titles" class="dash-section hidden">
+        <h2 class="text-2xl font-bold mt-10 mb-4 text-indigo-700">👑 Titel Verwaltung</h2>
+<div id="title-list" class="space-y-2 bg-white p-4 rounded shadow"></div>
+<form id="title-form" class="mt-4 space-y-2">
+  <input id="title-name" placeholder="Titel-Name" class="border p-2 rounded w-full">
+  <select id="title-condition" class="border p-2 rounded w-full">
+    <option value="rides">Anzahl Fahrten</option>
+    <option value="distance">Gesamtkilometer</option>
+  </select>
+  <input id="title-value" type="number" placeholder="Bedingung Wert" class="border p-2 rounded w-full">
+  <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">➕ Titel speichern</button>
+</form>
+      </section>
+
+      <section id="badges" class="dash-section hidden">
+        <h2 class="section-title">🏅 Abzeichen Verwaltung</h2>
+
+<div id="badge-list-admin" class="space-y-2 bg-white p-4 rounded shadow"></div>
+<form id="badge-form" class="mt-4 space-y-2">
+  <input id="badge-name" placeholder="Abzeichen-Name" class="border p-2 rounded w-full">
+
+  <label class="block font-bold">Icon hochladen</label>
+  <input id="badge-icon-file" type="file" accept="image/*" class="w-full border p-2 rounded">
+  <small class="text-gray-500">Oder Emoji eintragen:</small>
+  <input id="badge-icon" placeholder="Emoji/Icon (Fallback)" class="border p-2 rounded w-full">
+
+  <select id="badge-condition" class="border p-2 rounded w-full">
+    <option value="rides">Anzahl Fahrten</option>
+    <option value="distance">Gesamtkilometer</option>
+    <option value="night">Nachtfahrt</option>
+  </select>
+
+  <input id="badge-value" type="number" placeholder="Bedingung Wert" class="border p-2 rounded w-full">
+
+  <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded">➕ Abzeichen speichern</button>
+</form>
+      </section>
+    </main>
+  </div>
+
+<!-- versteckt, damit Leaflet nicht abstürzt -->
+<div id="admin-map" style="display:none;"></div>
+<form id="admin-hut-form" style="display:none;">
+  <input id="admin-hut-name" type="text">
+  <input id="admin-hut-images" type="file">
+</form>
+
+
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAu39z49KEJy9zso-etFIScmaFnWw8vhro",
+    authDomain: "eierhuettentour.firebaseapp.com",
+    projectId: "eierhuettentour",
+    storageBucket: "eierhuettentour.appspot.com",
+    messagingSenderId: "348272135205",
+    appId: "1:348272135205:web:f39a7d26d927fbf28dc3cc"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  const storage = firebase.storage();
+
+  const loginSection = document.getElementById('login-section');
+  const dashboard = document.getElementById('dashboard');
+  const hutList = document.getElementById('hut-list');
+  const searchInput = document.getElementById('search-input');
+  const notification = document.getElementById('notification');
+  const stats = document.getElementById('stats');
+  let huts = [], currentUser = null;
+let adminMarker;
+let adminMap;
+let adminLocation;
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Leaflet-Karte initialisieren
+  adminMap = L.map('admin-map').setView([51.1657, 10.4515], 6); // Mitte Deutschland
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(adminMap);
+
+  // Startmarker
+  adminMarker = L.marker([51.1657, 10.4515], { draggable: true }).addTo(adminMap);
+
+  // Marker-Bewegung überwachen
+  adminMarker.on('dragend', e => {
+    const pos = e.target.getLatLng();
+    adminLocation = new firebase.firestore.GeoPoint(pos.lat, pos.lng);
+  });
+
+  // Standort automatisch setzen, falls verfügbar
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude, longitude } = pos.coords;
+    adminMap.setView([latitude, longitude], 13);
+    adminMarker.setLatLng([latitude, longitude]);
+    adminLocation = new firebase.firestore.GeoPoint(latitude, longitude);
+  });
+});
+
+// Formular absenden
+document.getElementById('admin-hut-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  if (!adminLocation) {
+    alert('❌ Bitte wähle einen Standort auf der Karte.');
+    return;
+  }
+
+  editingData = {
+    name: document.getElementById('admin-hut-name').value.trim(),
+    location: adminLocation,
+    fotos: []
+  };
+
+  const files = document.getElementById('admin-hut-images').files;
+  if (files.length > 0) {
+    addMessage(`⏳ Lade ${files.length} Bild(er) hoch...`, 'bot');
+    const uploads = [];
+    for (let file of files) {
+      try {
+        const img = await uploadToImgBB(file);
+        uploads.push(img);
+      } catch (err) {
+        console.error('❌ Upload-Fehler:', err);
+        addMessage('❌ Fehler beim Hochladen eines Bildes.', 'bot');
+      }
+    }
+    editingData.fotos = uploads;
+  }
+
+  // Direkt speichern ohne PayPal
+  submitNewHutAdmin();
+});
+async function submitNewHutAdmin() {
+  if (!editingData.name || !editingData.location) {
+    addMessage('❌ Bitte gib alle Daten ein (mindestens Name und Standort).', 'bot');
+    return;
+  }
+
+  // 🔒 Nur gültige Bilder übernehmen
+  const validFotos = (editingData.fotos || []).filter(f =>
+    typeof f === 'object' && f.url && f.delete_url
+  );
+
+  const hut = {
+    ...editingData,
+    userId: currentUser.uid,
+    erstelltAm: firebase.firestore.FieldValue.serverTimestamp(),
+    status: 'angenommen',        // ✅ Direkt freigeschaltet
+    fotos: validFotos,
+    aboMonate: null,             // Kein Abo
+    paypalSubscriptionId: null,  // Kein PayPal
+    datenschutzZustimmung: {
+      bestätigtAm: firebase.firestore.FieldValue.serverTimestamp(),
+      durch: firebase.auth().currentUser?.email || "Admin"
+    }
+  };
+
+  try {
+    await db.collection('eierhuetten').add(hut);
+    addMessage('✅ Hütte ohne PayPal erfolgreich erstellt und freigeschaltet.', 'bot');
+    step = 0;
+    editingData = {};
+    showMyHuts(); // Aktualisieren
+  } catch (err) {
+    addMessage('❌ Fehler beim Erstellen der Hütte: ' + err.message, 'bot');
+  }
+}
+
+  
+  function showNotification(message) {
+    notification.textContent = message;
+    notification.style.display = 'block';
+    setTimeout(() => notification.style.display = 'none', 4000);
+  }
+
+  document.getElementById('login-btn').onclick = () => {
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+  };
+
+  auth.onAuthStateChanged(async user => {
+    if (user) {
+      currentUser = user;
+      const adminDoc = await db.collection('admins').doc(user.email).get();
+      if (!adminDoc.exists) {
+        alert('Zugriff verweigert: Du bist kein Admin.');
+        return;
+      }
+      loginSection.classList.add('hidden');
+      dashboard.classList.remove('hidden');
+      db.collection('eierhuetten').onSnapshot(() => {
+        showNotification('🔄 Live-Update: Hüttendaten wurden aktualisiert.');
+        loadHuts();
+      });
+      showSection('overview');
+        initLiveNewHuts();
+      initLivePendingFotos();
+      
+    }
+  });
+
+  searchInput.addEventListener('input', () => {
+  const term = searchInput.value.trim().toLowerCase();
+
+  if (!term) {
+    filteredHuts = []; // keine Filterung
+  } else {
+    filteredHuts = allHuts.filter(hut => {
+      return [
+        hut.name,
+        hut.status,
+        hut.paypalSubscriptionId,
+        hut.strom,
+        hut.sitzplaetze,
+        hut.oeffnungszeiten
+      ].some(field => (field || '').toLowerCase().includes(term));
+    });
+  }
+
+  currentPage = 1;
+  renderPage();
+});
+
+/*  async function loadHuts() {
+    const snapshot = await db.collection('eierhuetten').orderBy('erstelltAm', 'desc').get();
+    huts = await Promise.all(snapshot.docs.map(async doc => {
+      const data = doc.data();
+      const logSnap = await db.collection('eierhuetten').doc(doc.id).collection('log').orderBy('zeitpunkt', 'desc').get();
+      return {
+        id: doc.id,
+        ...data,
+        logCount: logSnap.size,
+        logs: logSnap.docs.map(d => d.data())
+      };
+    }));
+    renderHuts(huts);
+    renderStats(huts);
+  }*/
+  async function loadHuts() {
+    const snapshot = await db.collection('eierhuetten').orderBy('name').get();
+    allHuts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    currentPage = 1;
+    renderPage(currentPage);
+    renderStats(allHuts);
+  }
+
+  let statsChart; // Chart-Instanz für Updates merken
+
+function renderStats(list) {
+  const total        = list.length;
+  const withStrom    = list.filter(h => h.strom === 'Ja').length;
+  const withFotos    = list.filter(h => Array.isArray(h.fotos) && h.fotos.length > 0).length;
+  const count247     = list.filter(h => h.oeffnungszeiten === '24/7').length;
+  const newEntries   = list.filter(h => h.status === 'offen').length;
+  const pendingFotos = list.reduce((sum, h) =>
+      sum + (Array.isArray(h.fotos)
+             ? h.fotos.filter(f => f.status === 'wartet').length
+             : 0), 0);
+
+  // Karten
+  const c = document.getElementById("statsContainer");
+  c.innerHTML = `
+    <div class="bg-white p-4 rounded shadow text-center">
+      <p class="text-3xl font-bold">${total}</p>
+      <p class="text-gray-500">Gesamt&nbsp;Hütten</p>
+    </div>
+    <div class="bg-white p-4 rounded shadow text-center">
+      <p class="text-3xl font-bold">${newEntries}</p>
+      <p class="text-gray-500">Neue&nbsp;Eintragungen</p>
+    </div>
+    <div class="bg-white p-4 rounded shadow text-center">
+      <p class="text-3xl font-bold">${withStrom}</p>
+      <p class="text-gray-500">mit&nbsp;Strom</p>
+    </div>
+    <div class="bg-white p-4 rounded shadow text-center">
+      <p class="text-3xl font-bold">${withFotos}</p>
+      <p class="text-gray-500">mit&nbsp;Fotos</p>
+    </div>
+    <div class="bg-white p-4 rounded shadow text-center">
+      <p class="text-3xl font-bold">${pendingFotos}</p>
+      <p class="text-gray-500">wartende&nbsp;Fotos</p>
+    </div>
+    <div class="bg-white p-4 rounded shadow text-center">
+      <p class="text-3xl font-bold">${count247}</p>
+      <p class="text-gray-500">24/7 geöffnet</p>
+    </div>
+  `;
+
+  // Kreisdiagramm aktualisieren/erstellen
+  const ctx = document.getElementById('statsChart').getContext('2d');
+  const data = {
+    labels: ['mit Strom','mit Fotos','24/7 geöffnet','Neue Eintragungen'],
+    datasets: [{
+      data: [withStrom, withFotos, count247, newEntries],
+      backgroundColor: ['#3b82f6','#10b981','#f59e0b','#ef4444']
+    }]
+  };
+  const options = {
+    plugins: {
+      legend: { position: 'bottom' },
+      title: {
+        display: true,
+        text: 'Verteilung besonderer Merkmale'
+      }
+    }
+  };
+
+  if (statsChart) {
+    statsChart.data = data;
+    statsChart.update();
+  } else {
+    statsChart = new Chart(ctx, { type: 'doughnut', data, options });
+  }
+}
+
+ async function approveFoto(hutId, index) {
+  try {
+    const ref = db.collection('eierhuetten').doc(hutId);
+    const snap = await ref.get();
+    const fotos = Array.isArray(snap.data().fotos) ? [...snap.data().fotos] : [];
+
+    const f = fotos[index];
+    if (!f || typeof f === 'string') {
+      // Strings sind per Definition schon "freigegeben"
+      showNotification('ℹ️ Dieses Foto ist bereits freigegeben.');
+      return;
+    }
+    fotos[index] = { ...f, status: 'freigegeben' };
+
+    await ref.update({ fotos });
+    await ref.collection('log').add({
+      admin: currentUser.displayName || currentUser.email,
+      feld: 'fotos',
+      wert: `Foto freigegeben: ${f.url}`,
+      zeitpunkt: new Date()
+    });
+    showNotification('✅ Bild freigegeben');
+    loadHuts();
+  } catch (err) {
+    console.error(err);
+    showNotification('❌ Fehler beim Freigeben.');
+  }
+}
+
+async function rejectFoto(hutId, index) {
+  try {
+    const ref = db.collection('eierhuetten').doc(hutId);
+    const snap = await ref.get();
+    const fotos = Array.isArray(snap.data().fotos) ? [...snap.data().fotos] : [];
+
+    const f = fotos[index];
+    if (!f) return;
+
+    // ggf. zuerst bei imgbb löschen
+    const deleteUrl = typeof f === 'object' ? f.delete_url : null;
+    fotos.splice(index, 1);
+
+    await ref.update({ fotos });
+    await ref.collection('log').add({
+      admin: currentUser.displayName || currentUser.email,
+      feld: 'fotos',
+      wert: `Foto abgelehnt/gelöscht: ${typeof f === 'string' ? f : f.url}`,
+      zeitpunkt: new Date()
+    });
+
+    if (deleteUrl) {
+      try { await fetch(deleteUrl); } catch (e) { console.warn('imgbb delete fehlgeschlagen', e); }
+    }
+    showNotification('🗑️ Bild entfernt');
+    loadHuts();
+  } catch (err) {
+    console.error(err);
+    showNotification('❌ Fehler beim Entfernen.');
+  }
+}
+
+/*async function rejectFoto(hutId, index) {
+  const doc = await db.collection('eierhuetten').doc(hutId).get();
+  const fotos = doc.data().fotos || [];
+  const { delete_url } = fotos[index];
+  fotos.splice(index, 1);
+  await db.collection('eierhuetten').doc(hutId).update({ fotos });
+
+  if (delete_url) {
+    fetch(delete_url)
+      .then(() => showNotification('🗑️ Bild gelöscht'))
+      .catch(e => console.warn('Fehler beim Löschen', e));
+  }
+
+  loadHuts();
+}*/
+  async function initImageUpload(input, hutId) {
+  const files = Array.from(input.files);
+  if (files.length === 0) return;
+
+  showNotification(`⏳ Lade ${files.length} Bild(er) hoch...`);
+
+  const uploadedObjects = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const reader = new FileReader();
+
+    const base64 = await new Promise((resolve, reject) => {
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = () => reject('❌ Fehler beim Lesen der Datei.');
+      reader.readAsDataURL(file);
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append('key', '5df04de9bfd2776f101329be4193e44c'); // imgbb API Key
+      formData.append('image', base64);
+
+      const res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData });
+      const json = await res.json();
+
+      if (json?.data?.url) {
+        uploadedObjects.push({
+          url: json.data.url,
+          delete_url: json.data.delete_url || null,
+          status: 'wartet'
+        });
+      } else {
+        console.warn('❌ Upload unvollständig:', json);
+        showNotification(`❌ Fehler beim Hochladen von Bild ${i + 1}`);
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification(`❌ Upload-Fehler: ${err}`);
+    }
+  }
+
+  if (uploadedObjects.length > 0) {
+    try {
+      await db.collection('eierhuetten').doc(hutId).update({
+        fotos: firebase.firestore.FieldValue.arrayUnion(...uploadedObjects)
+      });
+      showNotification('✅ Bilder hochgeladen (warten auf Freigabe).');
+      loadHuts();
+    } catch (err) {
+      console.error(err);
+      showNotification('❌ Fehler beim Speichern der Bilder: ' + err.message);
+    }
+  }
+}
+ /* function updateField(hutId, field, value) {
+    db.collection('eierhuetten').doc(hutId).update({ [field]: value });
+    db.collection('eierhuetten').doc(hutId).collection('log').add({
+      admin: currentUser.displayName || currentUser.email,
+      feld: field,
+      wert: value,
+      zeitpunkt: new Date()
+    });
+    // Reaktion auf Statusänderung für Abo-Verwaltung
+  if (field === 'status') {
+    const aboRef = db.collection('abos').doc(hutId);
+
+    if (value === 'offen') {
+      aboRef.update({
+        status: 'paused',
+        updated: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      logHistory(hutId, 'Abo automatisch pausiert wegen Status "offen"');
+
+    } else if (value === 'abgelehnt') {
+      aboRef.update({
+        status: 'cancelled',
+        updated: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      logHistory(hutId, 'Abo automatisch gekündigt wegen Status "abgelehnt"');
+    }
+  }
+  }*/
+  
+
+  /*function renderHuts(list) {
+    hutList.innerHTML = '';
+    list.forEach(hut => {
+      const el = document.createElement('div');
+      el.className = 'bg-white p-4 rounded shadow space-y-2';
+
+      el.innerHTML = `
+  <input class="text-xl font-bold w-full mb-2" value="${hut.name || ''}" onchange="updateField('${hut.id}', 'name', this.value)">
+
+  <label>Status:
+    <select onchange="updateField('${hut.id}', 'status', this.value)" class="w-full mb-2">
+      ${['offen','angenommen','abgelehnt'].map(s => `<option ${s===hut.status?'selected':''}>${s}</option>`).join('')}
+    </select>
+  </label>
+
+  <label>Öffnungszeiten:
+    <select onchange="updateField('${hut.id}', 'oeffnungszeiten', this.value)" class="w-full mb-2">
+      ${['08:00–20:00','24/7'].map(o => `<option ${o===hut.oeffnungszeiten?'selected':''}>${o}</option>`).join('')}
+    </select>
+  </label>
+
+  <label>Strom:
+    <select onchange="updateField('${hut.id}', 'strom', this.value)" class="w-full mb-2">
+      ${['Ja','Nein'].map(o => `<option ${o===hut.strom?'selected':''}>${o}</option>`).join('')}
+    </select>
+  </label>
+
+  <label>Sitzplätze:
+    <select onchange="updateField('${hut.id}', 'sitzplaetze', this.value)" class="w-full mb-2">
+      ${['Ja','Nein'].map(o => `<option ${o===hut.sitzplaetze?'selected':''}>${o}</option>`).join('')}
+    </select>
+  </label>
+
+  <label>Fotos (freigegeben):</label>
+  <div class="flex flex-wrap gap-2 mb-2" id="fotos-container-${hut.id}">
+    ${Array.isArray(hut.fotos) ? hut.fotos.map((foto, i) => {
+      const f = typeof foto === 'string' ? { url: foto, status: 'freigegeben' } : foto;
+      if (f.status !== 'freigegeben') return '';
+      return `
+        <div class="relative w-24 h-24 rounded overflow-hidden border border-gray-300">
+          <img src="${f.url}" alt="Foto" class="object-cover w-full h-full" />
+          <button onclick="deleteFoto('${hut.id}', '${f.url}')" title="Foto löschen" 
+                  class="absolute top-0 right-0 bg-red-600 text-white rounded-bl px-1 text-sm font-bold hover:bg-red-700">×</button>
+        </div>
+      `;
+    }).join('') : '<p class="text-gray-500">Keine Fotos</p>'}
+  </div>
+
+  ${Array.isArray(hut.fotos) && hut.fotos.some(f => typeof f !== 'string' && f.status === 'wartet') ? `
+    <label>Fotos (warten auf Freigabe):</label>
+    <div class="flex flex-wrap gap-2 mb-2">
+      ${hut.fotos.map((f, i) => {
+        if (typeof f === 'string' || f.status !== 'wartet') return '';
+        return `
+          <div class="relative w-24 h-24 rounded overflow-hidden border border-yellow-400 border-dashed">
+            <img src="${f.url}" alt="wartet" class="object-cover w-full h-full opacity-50 grayscale" />
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-xs text-white bg-black/50">
+              ⏳ Wartet
+              <button onclick="approveFoto('${hut.id}', ${i})" class="bg-green-600 mt-1 px-1 rounded">✔ Freigeben</button>
+              <button onclick="rejectFoto('${hut.id}', ${i})" class="bg-red-600 mt-1 px-1 rounded">✖ Löschen</button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  ` : ''}
+
+ <label>Foto hochladen:
+  <input type="file" accept="image/*" onchange="uploadFoto(this, '${hut.id}')">
+  <div class="progress-bar"><div class="progress-fill" id="progress-${hut.id}"></div></div>
+</label>
+
+
+  <div class="minimap" id="map-${hut.id}"></div>
+
+  <details>
+    <summary>Bearbeitungs-Log (${hut.logCount})</summary>
+    <ul class="text-xs max-h-48 overflow-auto">
+      ${hut.logs.map(log => `<li><strong>${log.admin}</strong> hat <em>${log.feld}</em> auf <code>${log.wert}</code>${log.kommentar ? ` (Kommentar: ${log.kommentar})` : ''} geändert am ${new Date(log.zeitpunkt.seconds * 1000).toLocaleString()}</li>`).join('')}
+    </ul>
+  </details>
+
+          <!-- Abo -->
+        ${hut.aboStart && hut.paypalSubscriptionId ? `
+          <details class="bg-blue-50 border border-blue-200 rounded p-2 my-2 text-sm">
+            <summary class="cursor-pointer">💳 Abo-Informationen</summary>
+            <div><strong>Start:</strong> ${hut.aboStart?.toDate?.().toLocaleDateString("de-DE") || '-'}</div>
+            <div><strong>PayPal-ID:</strong> ${hut.paypalSubscriptionId}</div>
+            <div><strong>Status:</strong> aktiv</div>
+            ${Array.isArray(hut.aboHistory) && hut.aboHistory.length ? `
+              <div class="mt-2"><strong>Zahlungsverlauf:</strong>
+                <ul class="list-disc ml-5 text-xs">
+                  ${hut.aboHistory.map(e => `
+                    <li>${new Date(e.zeitpunkt?.seconds * 1000).toLocaleDateString("de-DE")} – ${e.betrag} € via ${e.methode}</li>
+                  `).join('')}
+                </ul>
+              </div>
+            ` : '<div class="text-xs text-gray-500 mt-2 italic">Kein Verlauf vorhanden.</div>'}
+          </details>
+        ` : `
+          <div class="my-2 text-sm">
+            <strong>💳 Kein aktives Abo</strong><br>
+            <div id="${paypalContainerId}" class="my-2"></div>
+          </div>
+
+        `}
+
+  <button onclick="deleteHut('${hut.id}')" class="bg-red-600 text-white px-2 py-1 rounded mt-3 w-full">Hütte löschen</button>
+`;
+
+      hutList.appendChild(el);
+
+      if (hut.location?.latitude && hut.location?.longitude) {
+        const map = L.map(`map-${hut.id}`, {
+          zoomControl: false,
+          dragging: true,
+          scrollWheelZoom: true,
+          doubleClickZoom: true,
+          boxZoom: true,
+          keyboard: true
+        }).setView([hut.location.latitude, hut.location.longitude], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        const marker = L.marker([hut.location.latitude, hut.location.longitude], { draggable: true }).addTo(map);
+
+        marker.on('dragend', async (e) => {
+          const newPos = e.target.getLatLng();
+          const kommentar = prompt('Bitte Kommentar zur Standortänderung eingeben:');
+          if (kommentar === null) {
+            marker.setLatLng([hut.location.latitude, hut.location.longitude]);
+            return;
+          }
+          await db.collection('eierhuetten').doc(hut.id).update({
+            location: {
+              latitude: newPos.lat,
+              longitude: newPos.lng
+            }
+          });
+          await db.collection('eierhuetten').doc(hut.id).collection('log').add({
+            admin: currentUser.displayName || currentUser.email,
+            feld: 'location',
+            wert: `Lat: ${newPos.lat.toFixed(6)}, Lng: ${newPos.lng.toFixed(6)}`,
+            kommentar: kommentar,
+            zeitpunkt: new Date()
+          });
+          showNotification(`📍 Standort von "${hut.name}" wurde aktualisiert.`);
+        });
+      }
+    });
+  }*/
+  // Änderung bestätigen + speichern (ohne Abo-Verwaltung)
+function updateField(hutId, field, value) {
+  if (!confirm(`⚠️ Willst du wirklich das Feld "${field}" auf "${value}" ändern?`)) {
+    return; // Abbrechen, wenn Admin nicht bestätigt
+  }
+
+  db.collection('eierhuetten').doc(hutId).update({ [field]: value });
+  db.collection('eierhuetten').doc(hutId).collection('log').add({
+    admin: currentUser.displayName || currentUser.email,
+    feld: field,
+    wert: value,
+    zeitpunkt: new Date()
+  });
+}
+function showSection(id) {
+  document.querySelectorAll('.dash-section').forEach(sec =>
+    sec.classList.add('hidden')
+  );
+  document.getElementById(id).classList.remove('hidden');
+
+  document.querySelectorAll('.nav-btn').forEach(btn =>
+    btn.classList.remove('active')
+  );
+  document
+    .querySelector(`.nav-btn[onclick="showSection('${id}')"]`)
+    .classList.add('active');
+}
+async function renderHuts(list) {
+  hutList.innerHTML = '';
+
+  for (const hut of list) {
+    try {
+      const el = document.createElement("div");
+el.className = "bg-white p-4 rounded shadow space-y-2";
+el.id = `hut-${hut.id}`; // <--- ID setzen, damit der Anker greift
+      const fotos = Array.isArray(hut.fotos) ? hut.fotos : [];
+      // Logs laden
+      let logs = [];
+      try {
+        const logSnap = await db.collection('eierhuetten')
+          .doc(hut.id)
+          .collection('log')
+          .orderBy('zeitpunkt', 'desc')
+          .limit(20)
+          .get();
+        logs = logSnap.docs.map(doc => doc.data());
+      } catch (err) {
+        console.error(`❌ Fehler beim Laden der Logs für Hütte ${hut.id}:`, err);
+      }
+
+      // Nachrichten laden
+      let messagesHTML = '<p class="text-sm text-gray-500 italic">💬 Nachrichten deaktiviert.</p>';
+      if (hut.allowMessages) {
+        try {
+          const msgSnap = await db.collection('hutMessages')
+            .where('hutId', '==', hut.id)
+            .orderBy('createdAt', 'desc')
+            .limit(50)
+            .get();
+
+          const normale = [];
+          const archivierte = [];
+
+          msgSnap.forEach(doc => {
+            const m = doc.data();
+            const datum = m.createdAt?.toDate().toLocaleString('de-DE') || '-';
+            const msgHTML = `
+              <div class="p-2 bg-white border rounded text-sm flex justify-between items-center">
+                <div>
+                  <div><strong>${m.senderName || 'Unbekannt'}</strong> – ${datum}</div>
+                  <div class="mt-1">${m.message || ''}</div>
+                </div>
+                <div class="space-x-2">
+                  <button onclick="deleteMessage('${doc.id}')" 
+                    class="px-2 py-1 bg-red-500 text-white rounded text-xs">🗑️</button>
+                  ${!m.archived ? `
+                    <button onclick="archiveMessage('${doc.id}')" 
+                      class="px-2 py-1 bg-yellow-500 text-white rounded text-xs">📦</button>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+            if (m.archived) archivierte.push(msgHTML);
+            else normale.push(msgHTML);
+          });
+
+          messagesHTML = `
+            <div class="mt-4 p-2 bg-gray-50 border rounded">
+              <strong>💬 Nachrichten</strong>
+              <div class="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                ${normale.length ? normale.join('') : '<p class="text-gray-500">📭 Keine Nachrichten.</p>'}
+              </div>
+            </div>
+            <div class="mt-4 p-2 bg-gray-100 border rounded">
+              <strong>📦 Archivierte Nachrichten</strong>
+              <div class="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                ${archivierte.length ? archivierte.join('') : '<p class="text-gray-500">📭 Keine archivierten Nachrichten.</p>'}
+              </div>
+            </div>
+          `;
+        } catch (err) {
+          console.error(`❌ Fehler beim Laden der Nachrichten für Hütte ${hut.id}:`, err);
+          messagesHTML = '<p class="text-sm text-red-500">❌ Fehler beim Laden der Nachrichten.</p>';
+        }
+      }
+
+      // Haupt-HTML
+      el.innerHTML = `
+        <input class="text-xl font-bold w-full mb-2" 
+          value="${hut.name || ''}" 
+          onchange="updateField('${hut.id}', 'name', this.value)">
+
+        <!-- Status -->
+        <label>Status:
+          <select onchange="updateField('${hut.id}', 'status', this.value)" class="w-full mb-2">
+            ${['offen','angenommen','abgelehnt'].map(s => `<option ${s===hut.status?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </label>
+
+        <!-- Strom -->
+        <label>Strom:
+          <select onchange="updateField('${hut.id}', 'strom', this.value)" class="w-full mb-2">
+            ${['Ja','Nein'].map(o => `<option ${o===hut.strom?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </label>
+
+        <!-- Sitzplätze -->
+        <label>Sitzplätze:
+          <select onchange="updateField('${hut.id}', 'sitzplaetze', this.value)" class="w-full mb-2">
+            ${['Ja','Nein'].map(o => `<option ${o===hut.sitzplaetze?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </label>
+
+        <div class="minimap" id="map-${hut.id}"></div>
+
+<!-- Fotos (freigegeben) -->
+<label>Fotos (freigegeben):</label>
+<div class="flex flex-wrap gap-2 mb-2" id="fotos-container-${hut.id}">
+  ${
+    fotos.some(f => (typeof f !== 'string' && f.status === 'freigegeben') || typeof f === 'string')
+      ? fotos.map((foto, i) => {
+          const f = typeof foto === 'string' ? { url: foto, status: 'freigegeben' } : foto;
+          if (f.status !== 'freigegeben') return '';
+          return `
+            <div class="relative w-24 h-24 rounded overflow-hidden border border-gray-300">
+              <img src="${f.url}" alt="Foto" class="object-cover w-full h-full" />
+              <button onclick="deleteFoto('${hut.id}', ${i})" title="Foto löschen" 
+                      class="absolute top-0 right-0 bg-red-600 text-white rounded-bl px-1 text-sm font-bold hover:bg-red-700">×</button>
+            </div>`;
+        }).join('')
+      : '<p class="text-gray-500">Keine Fotos</p>'
+  }
+</div>
+
+<!-- Fotos (warten auf Freigabe) -->
+${
+  fotos.some(f => typeof f === 'object' && f.status === 'wartet') ? `
+    <label>Fotos (warten auf Freigabe):</label>
+    <div class="flex flex-wrap gap-2 mb-2">
+      ${fotos.map((f, i) => {
+        if (typeof f === 'string' || f.status !== 'wartet') return '';
+        return `
+          <div class="relative w-24 h-24 rounded overflow-hidden border border-yellow-400 border-dashed">
+            <img src="${f.url}" alt="wartet" class="object-cover w-full h-full opacity-50 grayscale" />
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-xs text-white bg-black/50">
+              ⏳ Wartet
+              <button onclick="approveFoto('${hut.id}', ${i})" class="bg-green-600 mt-1 px-1 rounded">✔ Freigeben</button>
+              <button onclick="rejectFoto('${hut.id}', ${i})" class="bg-red-600 mt-1 px-1 rounded">✖ Löschen</button>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  ` : ''
+}
+<!-- Upload -->
+<label class="block mt-2 text-sm">📷 Neues Bild:
+  <input type="file" accept="image/*" onchange="initImageUpload(this, '${hut.id}')" class="upload-image mt-1" />
+</label>
+<div id="progress-${hut.id}" class="h-2 bg-gray-200 rounded hidden mt-2">
+  <div class="h-2 bg-green-500 rounded" style="width: 0%"></div>
+</div>
+        <!-- Chat erlauben -->
+        <label>Chat:
+          <select onchange="updateField('${hut.id}', 'allowMessages', this.value)" class="w-full mb-2">
+            <option value="true" ${hut.allowMessages ? 'selected' : ''}>✅ Aktiv</option>
+            <option value="false" ${!hut.allowMessages ? 'selected' : ''}>❌ Deaktiv</option>
+          </select>
+        </label>
+
+        <!-- Nachrichtenbereich -->
+        ${messagesHTML}
+
+        <!-- Logs -->
+        <details class="mt-3">
+          <summary>Bearbeitungs-Log (${logs.length})</summary>
+          <ul class="text-xs max-h-48 overflow-auto">
+            ${logs.map(log => `
+              <li><strong>${log.admin}</strong> änderte <em>${log.feld}</em> 
+              auf <code>${log.wert}</code> 
+              am ${new Date(log.zeitpunkt?.seconds * 1000 || Date.now()).toLocaleString()}</li>
+            `).join('')}
+          </ul>
+        </details>
+
+        <button onclick="deleteHut('${hut.id}')" 
+          class="bg-red-600 text-white px-2 py-1 rounded mt-3 w-full">Hütte löschen</button>
+      `;
+
+      hutList.appendChild(el);
+
+      // Karte anzeigen
+      if (hut.location?.latitude && hut.location?.longitude) {
+        const map = L.map(`map-${hut.id}`, {
+          zoomControl: false,
+          dragging: true,
+          scrollWheelZoom: true,
+          doubleClickZoom: true,
+          boxZoom: true,
+          keyboard: true
+        }).setView([hut.location.latitude, hut.location.longitude], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        const marker = L.marker([hut.location.latitude, hut.location.longitude], { draggable: true }).addTo(map);
+
+        // invalidateSize fix, falls Container versteckt war
+        setTimeout(() => map.invalidateSize(), 200);
+
+        marker.on('dragend', async (e) => {
+          const newPos = e.target.getLatLng();
+          const kommentar = prompt('Bitte Kommentar zur Standortänderung eingeben:');
+          if (kommentar === null) {
+            marker.setLatLng([hut.location.latitude, hut.location.longitude]);
+            return;
+          }
+          await db.collection('eierhuetten').doc(hut.id).update({
+            location: { latitude: newPos.lat, longitude: newPos.lng }
+          });
+          await db.collection('eierhuetten').doc(hut.id).collection('log').add({
+            admin: currentUser.displayName || currentUser.email,
+            feld: 'location',
+            wert: `Lat: ${newPos.lat.toFixed(6)}, Lng: ${newPos.lng.toFixed(6)}`,
+            kommentar: kommentar,
+            zeitpunkt: new Date()
+          });
+          showNotification(`📍 Standort von "${hut.name}" wurde aktualisiert.`);
+        });
+      }
+
+    } catch (err) {
+      console.warn(`❌ Hütte konnte nicht gerendert werden: ${hut?.id || 'unbekannt'}`, err);
+      const fallback = document.createElement('div');
+      fallback.className = 'bg-red-100 text-red-800 p-2 rounded mb-2';
+      fallback.textContent = `⚠️ Hütte konnte nicht geladen werden (ID: ${hut?.id || 'unbekannt'})`;
+      hutList.appendChild(fallback);
+    }
+  }
+}
+ /* async function renderHuts(list) {
+  hutList.innerHTML = '';
+
+  for (const hut of list) {
+    try {
+      const el = document.createElement('div');
+      el.className = 'bg-white p-4 rounded shadow space-y-2';
+
+      const fotos = Array.isArray(hut.fotos) ? hut.fotos : [];
+
+      // Logs laden mit try/catch
+      let logs = [];
+      try {
+        const logSnap = await db.collection('eierhuetten')
+          .doc(hut.id)
+          .collection('log')
+          .orderBy('zeitpunkt', 'desc')
+          .limit(20)
+          .get();
+        logs = logSnap.docs.map(doc => doc.data());
+      } catch (err) {
+        console.error(`❌ Fehler beim Laden der Logs für Hütte ${hut.id}:`, err);
+      }
+
+      // Nachrichten laden mit try/catch
+      let messagesHTML = '<p class="text-sm text-gray-500 italic">💬 Nachrichten deaktiviert.</p>';
+      if (hut.allowMessages) {
+        try {
+          const msgSnap = await db.collection('hutMessages')
+            .where('hutId', '==', hut.id)
+            .orderBy('createdAt', 'desc')
+            .limit(50)
+            .get();
+
+          const normale = [];
+          const archivierte = [];
+
+          msgSnap.forEach(doc => {
+            const m = doc.data();
+            const datum = m.createdAt?.toDate().toLocaleString('de-DE') || '-';
+            const msgHTML = `
+              <div class="p-2 bg-white border rounded text-sm flex justify-between items-center">
+                <div>
+                  <div><strong>${m.senderName || 'Unbekannt'}</strong> – ${datum}</div>
+                  <div class="mt-1">${m.message || ''}</div>
+                </div>
+                <div class="space-x-2">
+                  <button onclick="deleteMessage('${doc.id}')" 
+                    class="px-2 py-1 bg-red-500 text-white rounded text-xs">🗑️</button>
+                  ${!m.archived ? `
+                    <button onclick="archiveMessage('${doc.id}')" 
+                      class="px-2 py-1 bg-yellow-500 text-white rounded text-xs">📦</button>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+            if (m.archived) archivierte.push(msgHTML);
+            else normale.push(msgHTML);
+          });
+
+          messagesHTML = `
+            <div class="mt-4 p-2 bg-gray-50 border rounded">
+              <strong>💬 Nachrichten</strong>
+              <div class="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                ${normale.length ? normale.join('') : '<p class="text-gray-500">📭 Keine Nachrichten.</p>'}
+              </div>
+            </div>
+            <div class="mt-4 p-2 bg-gray-100 border rounded">
+              <strong>📦 Archivierte Nachrichten</strong>
+              <div class="mt-2 space-y-2 max-h-40 overflow-y-auto">
+                ${archivierte.length ? archivierte.join('') : '<p class="text-gray-500">📭 Keine archivierten Nachrichten.</p>'}
+              </div>
+            </div>
+          `;
+        } catch (err) {
+          console.error(`❌ Fehler beim Laden der Nachrichten für Hütte ${hut.id}:`, err);
+          messagesHTML = '<p class="text-sm text-red-500">❌ Fehler beim Laden der Nachrichten.</p>';
+        }
+      }
+
+      // Haupt-HTML für Hütte
+      el.innerHTML = `
+        <input class="text-xl font-bold w-full mb-2" 
+          value="${hut.name || ''}" 
+          onchange="updateField('${hut.id}', 'name', this.value)">
+
+        <!-- Status -->
+        <label>Status:
+          <select onchange="updateField('${hut.id}', 'status', this.value)" class="w-full mb-2">
+            ${['offen','angenommen','abgelehnt'].map(s => `<option ${s===hut.status?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </label>
+
+        <!-- Strom -->
+        <label>Strom:
+          <select onchange="updateField('${hut.id}', 'strom', this.value)" class="w-full mb-2">
+            ${['Ja','Nein'].map(o => `<option ${o===hut.strom?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </label>
+
+        <!-- Sitzplätze -->
+        <label>Sitzplätze:
+          <select onchange="updateField('${hut.id}', 'sitzplaetze', this.value)" class="w-full mb-2">
+            ${['Ja','Nein'].map(o => `<option ${o===hut.sitzplaetze?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </label>
+<div class="minimap" id="map-${hut.id}"></div>
+
+        <!-- Nachrichtenbereich -->
+        ${messagesHTML}
+
+        <!-- Logs -->
+        <details class="mt-3">
+          <summary>Bearbeitungs-Log (${logs.length})</summary>
+          <ul class="text-xs max-h-48 overflow-auto">
+            ${logs.map(log => `
+              <li><strong>${log.admin}</strong> änderte <em>${log.feld}</em> 
+              auf <code>${log.wert}</code> 
+              am ${new Date(log.zeitpunkt?.seconds * 1000 || Date.now()).toLocaleString()}</li>
+            `).join('')}
+          </ul>
+        </details>
+
+        <button onclick="deleteHut('${hut.id}')" 
+          class="bg-red-600 text-white px-2 py-1 rounded mt-3 w-full">Hütte löschen</button>
+      `;
+
+      hutList.appendChild(el);
+
+      if (hut.location?.latitude && hut.location?.longitude) {
+        const map = L.map(`map-${hut.id}`, {
+          zoomControl: false,
+          dragging: true,
+          scrollWheelZoom: true,
+          doubleClickZoom: true,
+          boxZoom: true,
+          keyboard: true
+        }).setView([hut.location.latitude, hut.location.longitude], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        const marker = L.marker([hut.location.latitude, hut.location.longitude], { draggable: true }).addTo(map);
+
+        marker.on('dragend', async (e) => {
+          const newPos = e.target.getLatLng();
+          const kommentar = prompt('Bitte Kommentar zur Standortänderung eingeben:');
+          if (kommentar === null) {
+            marker.setLatLng([hut.location.latitude, hut.location.longitude]);
+            return;
+          }
+          await db.collection('eierhuetten').doc(hut.id).update({
+            location: {
+              latitude: newPos.lat,
+              longitude: newPos.lng
+            }
+          });
+          await db.collection('eierhuetten').doc(hut.id).collection('log').add({
+            admin: currentUser.displayName || currentUser.email,
+            feld: 'location',
+            wert: `Lat: ${newPos.lat.toFixed(6)}, Lng: ${newPos.lng.toFixed(6)}`,
+            kommentar: kommentar,
+            zeitpunkt: new Date()
+          });
+          showNotification(`📍 Standort von "${hut.name}" wurde aktualisiert.`);
+        });
+      }
+
+    } catch (err) {
+      console.warn(`❌ Hütte konnte nicht gerendert werden: ${hut?.id || 'unbekannt'}`, err);
+      const fallback = document.createElement('div');
+      fallback.className = 'bg-red-100 text-red-800 p-2 rounded mb-2';
+      fallback.textContent = `⚠️ Hütte konnte nicht geladen werden (ID: ${hut?.id || 'unbekannt'})`;
+      hutList.appendChild(fallback);
+    }
+  }
+}*/
+
+// Hilfsfunktionen
+async function deleteMessage(id) {
+  try {
+    await db.collection("hutMessages").doc(id).delete();
+    alert("🗑️ Nachricht gelöscht");
+    location.reload();
+  } catch (err) {
+    console.error("❌ Fehler beim Löschen:", err);
+  }
+}
+
+async function archiveMessage(id) {
+  try {
+    await db.collection("hutMessages").doc(id).update({ archived: true });
+    alert("📦 Nachricht archiviert");
+    location.reload();
+  } catch (err) {
+    console.error("❌ Fehler beim Archivieren:", err);
+  }
+}
+ /* function renderHuts(list) {
+  hutList.innerHTML = '';
+  list.forEach(hut => {
+    try {
+      const el = document.createElement('div');
+      el.className = 'bg-white p-4 rounded shadow space-y-2';
+
+      const logs = Array.isArray(hut.logs) ? hut.logs : [];
+      const aboHistory = Array.isArray(hut.aboHistory) ? hut.aboHistory : [];
+      const fotos = Array.isArray(hut.fotos) ? hut.fotos : [];
+
+      const paypalContainerId = `paypal-${hut.id}`;
+
+      el.innerHTML = `
+        <input class="text-xl font-bold w-full mb-2" value="${hut.name || ''}" onchange="updateField('${hut.id}', 'name', this.value)">
+
+        <!-- Status -->
+        <label>Status:
+          <select onchange="updateField('${hut.id}', 'status', this.value)" class="w-full mb-2">
+            ${['offen','angenommen','abgelehnt'].map(s => `<option ${s===hut.status?'selected':''}>${s}</option>`).join('')}
+          </select>
+        </label>
+
+        <!-- Öffnungszeiten -->
+        <label>Öffnungszeiten:
+          <select onchange="updateField('${hut.id}', 'oeffnungszeiten', this.value)" class="w-full mb-2">
+            ${['08:00–20:00','24/7'].map(o => `<option ${o===hut.oeffnungszeiten?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </label>
+
+        <!-- Strom & Sitzplätze -->
+        <label>Strom:
+          <select onchange="updateField('${hut.id}', 'strom', this.value)" class="w-full mb-2">
+            ${['Ja','Nein'].map(o => `<option ${o===hut.strom?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </label>
+
+        <label>Sitzplätze:
+          <select onchange="updateField('${hut.id}', 'sitzplaetze', this.value)" class="w-full mb-2">
+            ${['Ja','Nein'].map(o => `<option ${o===hut.sitzplaetze?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </label>
+
+        <!-- Fotos -->
+        <label>Fotos (freigegeben):</label>
+        <div class="flex flex-wrap gap-2 mb-2" id="fotos-container-${hut.id}">
+          ${
+            fotos.some(f => (typeof f !== 'string' && f.status === 'freigegeben') || typeof f === 'string')
+              ? fotos.map((foto, i) => {
+                  const f = typeof foto === 'string' ? { url: foto, status: 'freigegeben' } : foto;
+                  if (f.status !== 'freigegeben') return '';
+                  return `
+                    <div class="relative w-24 h-24 rounded overflow-hidden border border-gray-300">
+                      <img src="${f.url}" alt="Foto" class="object-cover w-full h-full" />
+                      <button onclick="deleteFoto('${hut.id}', '${f.url}')" title="Foto löschen" 
+                              class="absolute top-0 right-0 bg-red-600 text-white rounded-bl px-1 text-sm font-bold hover:bg-red-700">×</button>
+                    </div>`;
+                }).join('')
+              : '<p class="text-gray-500">Keine Fotos</p>'
+          }
+        </div>
+
+        <!-- Fotos in Warteschlange -->
+        ${
+          fotos.some(f => typeof f === 'object' && f.status === 'wartet') ? `
+            <label>Fotos (warten auf Freigabe):</label>
+            <div class="flex flex-wrap gap-2 mb-2">
+              ${fotos.map((f, i) => {
+                if (typeof f === 'string' || f.status !== 'wartet') return '';
+                return `
+                  <div class="relative w-24 h-24 rounded overflow-hidden border border-yellow-400 border-dashed">
+                    <img src="${f.url}" alt="wartet" class="object-cover w-full h-full opacity-50 grayscale" />
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-xs text-white bg-black/50">
+                      ⏳ Wartet
+                      <button onclick="approveFoto('${hut.id}', ${i})" class="bg-green-600 mt-1 px-1 rounded">✔ Freigeben</button>
+                      <button onclick="rejectFoto('${hut.id}', ${i})" class="bg-red-600 mt-1 px-1 rounded">✖ Löschen</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : ''
+        }
+<!-- Upload -->
+        <!-- Upload -->
+        <label class="block mt-2 text-sm">📷 Neues Bild:
+          <input type="file" accept="image/*" onchange="initImageUpload(this, '${hut.id}')" class="upload-image mt-1" />
+        </label>
+        <div id="progress-${hut.id}" class="h-2 bg-gray-200 rounded hidden mt-2">
+          <div class="h-2 bg-green-500 rounded" style="width: 0%"></div>
+        </div>
+
+        <!-- Minimap -->
+        <div class="minimap" id="map-${hut.id}"></div>
+
+        <!-- Logs -->
+        <details>
+          <summary>Bearbeitungs-Log (${logs.length})</summary>
+          <ul class="text-xs max-h-48 overflow-auto">
+            ${logs.map(log => `
+              <li><strong>${log.admin}</strong> hat <em>${log.feld}</em> auf <code>${log.wert}</code>${log.kommentar ? ` (Kommentar: ${log.kommentar})` : ''} geändert am ${new Date(log.zeitpunkt?.seconds * 1000 || Date.now()).toLocaleString()}</li>
+            `).join('')}
+          </ul>
+        </details>
+
+        <!-- Nachrichtenbereich -->
+${hut.allowMessages ? `
+  <div class="mt-4 p-2 bg-gray-50 border rounded">
+    <strong>💬 Nachrichten</strong>
+    <div id="chat-messages-${hut.id}" class="mt-2 space-y-2 max-h-60 overflow-y-auto">⏳ Lädt...</div>
+  </div>
+` : `
+  <div class="mt-4 text-sm text-gray-500 italic">
+    💬 Nachrichten sind für diese Hütte deaktiviert.
+  </div>
+`}
+
+        <button onclick="deleteHut('${hut.id}')" class="bg-red-600 text-white px-2 py-1 rounded mt-3 w-full">Hütte löschen</button>
+      `;
+
+      hutList.appendChild(el);
+if (hut.allowMessages) ladeNachrichten(hut.id);
+      // Minimap
+      if (hut.location?.latitude && hut.location?.longitude) {
+        const map = L.map(`map-${hut.id}`, {
+          zoomControl: false,
+          dragging: true,
+          scrollWheelZoom: true,
+          doubleClickZoom: true,
+          boxZoom: true,
+          keyboard: true
+        }).setView([hut.location.latitude, hut.location.longitude], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        const marker = L.marker([hut.location.latitude, hut.location.longitude], { draggable: true }).addTo(map);
+
+        marker.on('dragend', async (e) => {
+          const newPos = e.target.getLatLng();
+          const kommentar = prompt('Bitte Kommentar zur Standortänderung eingeben:');
+          if (kommentar === null) {
+            marker.setLatLng([hut.location.latitude, hut.location.longitude]);
+            return;
+          }
+          await db.collection('eierhuetten').doc(hut.id).update({
+            location: {
+              latitude: newPos.lat,
+              longitude: newPos.lng
+            }
+          });
+          await db.collection('eierhuetten').doc(hut.id).collection('log').add({
+            admin: currentUser.displayName || currentUser.email,
+            feld: 'location',
+            wert: `Lat: ${newPos.lat.toFixed(6)}, Lng: ${newPos.lng.toFixed(6)}`,
+            kommentar,
+            zeitpunkt: new Date()
+          });
+          showNotification(`📍 Standort von "${hut.name}" wurde aktualisiert.`);
+        });
+      }
+    } catch (err) {
+      console.warn(`❌ Hütte konnte nicht gerendert werden: ${hut?.id || 'unbekannt'}`, err);
+      const fallback = document.createElement('div');
+      fallback.className = 'bg-red-100 text-red-800 p-2 rounded mb-2';
+      fallback.textContent = `⚠️ Hütte konnte nicht geladen werden (ID: ${hut?.id || 'unbekannt'})`;
+      hutList.appendChild(fallback);
+    }
+  });
+  }*/
+  let allHuts = [];
+let filteredHuts = [];
+let currentPage = 1;
+const hutsPerPage = 15;
+
+function renderPage(page) {
+  const start = (page - 1) * hutsPerPage;
+  const end = start + hutsPerPage;
+  const source = filteredHuts.length ? filteredHuts : allHuts;
+  const hutsToRender = source.slice(start, end); // <--- Fix hier!
+
+  renderHuts(hutsToRender);
+  renderPagination(source.length); // <--- Übergeben der tatsächlichen Anzahl
+}
+function renderPagination(totalItems) {
+  const totalPages = Math.ceil(totalItems / hutsPerPage);
+  const paginationContainer = document.getElementById('pagination');
+
+  paginationContainer.innerHTML = '';
+
+  if (totalPages <= 1) return;
+
+  const createPageBtn = (label, pageNum) => {
+    const btn = document.createElement('button');
+    btn.textContent = label;
+    btn.disabled = pageNum === currentPage;
+    btn.className = 'px-2 py-1 border rounded mx-1';
+    btn.onclick = () => {
+      currentPage = pageNum;
+      renderPage(currentPage);
+    };
+    return btn;
+  };
+
+  for (let i = 1; i <= totalPages; i++) {
+    paginationContainer.appendChild(createPageBtn(i, i));
+  }
+}
+
+  function applySearchAndSort() {
+  const search = document.getElementById("search-input")?.value.toLowerCase() || "";
+  const sortBy = document.getElementById("sortSelect")?.value || "name";
+
+  // filtern nach Name, Status, Strom, Sitzplätzen
+  filteredHuts = allHuts.filter(hut => {
+    const name = hut.name?.toLowerCase() || "";
+    const status = hut.status?.toLowerCase() || "";
+    const strom = hut.strom?.toLowerCase() || "";
+    const sitz = hut.sitzplaetze?.toLowerCase() || "";
+    return (
+      name.includes(search) ||
+      status.includes(search) ||
+      strom.includes(search) ||
+      sitz.includes(search)
+    );
+  });
+
+  // sortieren
+  filteredHuts.sort((a, b) => {
+    if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
+    if (sortBy === "createdAt") return (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0);
+    return 0;
+  });
+
+  // neu rendern
+  currentPage = 1;
+  renderPage(currentPage);
+
+  // Statistiken aktualisieren
+  const source = filteredHuts.length ? filteredHuts : allHuts;
+  renderStats(source);
+  }
+// Upload-Funktion:
+/*async function initImageUpload(input, hutId) {
+  const files = Array.from(input.files);
+  if (files.length === 0) return;
+
+  showNotification(`⏳ Lade ${files.length} Bild(er) hoch...`);
+
+  const uploadedUrls = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const reader = new FileReader();
+
+    const base64 = await new Promise((resolve, reject) => {
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = () => reject('❌ Fehler beim Lesen der Datei.');
+      reader.readAsDataURL(file);
+    });
+
+    try {
+      const formData = new FormData();
+      formData.append('key', '5df04de9bfd2776f101329be4193e44c'); // dein imgbb Key
+      formData.append('image', base64);
+
+      const res = await fetch('https://api.imgbb.com/1/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      const json = await res.json();
+
+      if (json?.data?.url) {
+        uploadedUrls.push(json.data.url);
+      } else {
+        console.warn('❌ Upload war unvollständig oder fehlerhaft:', json);
+        showNotification(`❌ Fehler beim Hochladen von Bild ${i + 1}`);
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification(`❌ Upload-Fehler: ${err}`);
+    }
+  }
+
+  if (uploadedUrls.length > 0) {
+    try {
+      // URLs als Strings zu Firestore hinzufügen
+      await db.collection('eierhuetten').doc(hutId).update({
+        fotos: firebase.firestore.FieldValue.arrayUnion(...uploadedUrls)
+      });
+      showNotification('✅ Bilder wurden erfolgreich hochgeladen.');
+      loadHuts(); // falls du die Liste neu laden willst
+    } catch (err) {
+      console.error(err);
+      showNotification('❌ Fehler beim Speichern der Bilder in der Datenbank: ' + err.message);
+    }
+  }
+}*/
+
+// Beispiel Upload-Funktion aus HTML
+function uploadFoto(input, hutId) {
+  initImageUpload(input, hutId)
+    .then(uploads => {
+      // Hier kannst du die Uploads weiterverarbeiten, falls nötig
+      console.log('Uploads:', uploads);
+    });
+}
+
+
+// Diese Funktion rufst du im HTML-Attribut onchange auf
+/*function uploadFoto(input, hutId) {
+  initImageUpload(input, hutId);
+}
+*/
+  /*async function uploadFoto(input, hutId) {
+    const file = input.files[0];
+    if (!file) return;
+    const ref = storage.ref(`fotos/${hutId}/${Date.now()}_${file.name}`);
+    const task = ref.put(file);
+    task.on('state_changed', snapshot => {
+      const percent = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+      document.getElementById(`progress-${hutId}`).style.width = `${percent}%`;
+    },
+    err => alert('Upload fehlgeschlagen: ' + err.message),
+    async () => {
+      const url = await task.snapshot.ref.getDownloadURL();
+      await db.collection('eierhuetten').doc(hutId).update({
+        fotos: firebase.firestore.FieldValue.arrayUnion(url)
+      });
+      updateField(hutId, 'fotos', url);
+      showNotification('📸 Foto erfolgreich hochgeladen.');
+      document.getElementById(`progress-${hutId}`).style.width = `0%`;
+      loadHuts();
+    });
+  }*/
+
+  async function deleteFoto(hutId, index) {
+  // kleine Rechen-Sicherheitsabfrage
+  const a = Math.floor(Math.random() * 10) + 1;
+  const b = Math.floor(Math.random() * 10) + 1;
+  const answer = a + b;
+
+  const userAnswer = prompt(`Bitte rechne zur Bestätigung: ${a} + ${b} = ?`);
+  if (userAnswer === null) return;
+  if (parseInt(userAnswer) !== answer) {
+    alert('Falsche Antwort. Foto wird nicht gelöscht.');
+    return;
+  }
+  if (!confirm('Foto wirklich löschen?')) return;
+
+  try {
+    const ref = db.collection('eierhuetten').doc(hutId);
+    const snap = await ref.get();
+    const fotos = Array.isArray(snap.data().fotos) ? [...snap.data().fotos] : [];
+    const f = fotos[index];
+    if (!f) return;
+
+    const url = typeof f === 'string' ? f : f.url;
+    const deleteUrl = typeof f === 'object' ? f.delete_url : null;
+
+    fotos.splice(index, 1);
+    await ref.update({ fotos });
+
+    await ref.collection('log').add({
+      admin: currentUser.displayName || currentUser.email,
+      feld: 'fotos',
+      wert: `Foto gelöscht: ${url}`,
+      zeitpunkt: new Date()
+    });
+
+    if (deleteUrl) {
+      try { await fetch(deleteUrl); } catch (e) { console.warn('imgbb delete fehlgeschlagen', e); }
+    }
+
+    showNotification('Foto wurde gelöscht.');
+    loadHuts();
+  } catch (e) {
+    alert('Fehler beim Löschen des Fotos: ' + e.message);
+  }
+}
+
+  async function deleteHut(id) {
+  if (!confirm('Möchtest du diese Hütte wirklich löschen?')) return;
+
+  db.collection('eierhuetten').doc(id).get().then(doc => {
+    if (!doc.exists) {
+      showNotification('❌ Hütte nicht gefunden.', 'bot');
+      return;
+    }
+
+    const hut = doc.data();
+
+    // Prüfen, ob Abo existiert
+    if (hut.paypalSubscriptionId) {
+      showNotification('🔄 Kündige PayPal-Abo...', 'bot');
+      console.log('➡️ Sende Abo-Kündigung für:', hut.paypalSubscriptionId);
+
+      fetch('https://us-central1-eierhuettentour.cloudfunctions.net/cancelPaypalSubscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscriptionId: hut.paypalSubscriptionId })
+      })
+      .then(async response => {
+        if (!response.ok) {
+          let errorText = await response.text();
+          try {
+            const errorJson = JSON.parse(errorText);
+            throw new Error(errorJson.error || 'Unbekannter Fehler bei Kündigung');
+          } catch {
+            throw new Error(errorText);
+          }
+        }
+
+        const result = await response.json();
+        if (result.success) {
+          showNotification('✅ Abo erfolgreich gekündigt.', 'bot');
+          console.log('✅ Kündigung erfolgreich');
+
+          // Danach Hütte löschen
+          db.collection('eierhuetten').doc(id).delete().then(() => {
+            showNotification('🗑️ Hütte gelöscht.', 'bot');
+            korrigiereFehlendeAbos().then(() => showMyHuts());
+          });
+        } else {
+          console.error('❌ Fehler bei Kündigung:', result.error || result);
+          if (confirm(`⚠️ Das PayPal-Abo konnte nicht automatisch gekündigt werden.\nMöchtest du die Hütte trotzdem löschen?`)) {
+            db.collection('eierhuetten').doc(id).delete().then(() => {
+              showNotification('🗑️ Hütte gelöscht (Abo evtl. noch aktiv).', 'bot');
+              loadHuts();
+            });
+          } else {
+            showNotification('🚫 Löschvorgang abgebrochen.', 'bot');
+          }
+        }
+      })
+      .catch(err => {
+        console.error('❌ Fehler bei Kündigung:', err.message || err);
+        if (confirm(`⚠️ Fehler bei der PayPal-Kündigung: ${err.message || 'Unbekannt'}\nMöchtest du die Hütte trotzdem löschen?`)) {
+          db.collection('eierhuetten').doc(id).delete().then(() => {
+            showNotification('🗑️ Hütte gelöscht (Abo evtl. noch aktiv).', 'bot');
+            loadHuts();
+          });
+        } else {
+          showNotification('🚫 Löschvorgang abgebrochen.', 'bot');
+        }
+      });
+
+    } else {
+      // Kein Abo → direkt löschen
+      db.collection('eierhuetten').doc(id).delete().then(() => {
+        showNotification('🗑️ Hütte gelöscht.', 'bot');
+        loadHuts();
+      });
+    }
+  }).catch(err => {
+    console.error('❌ Fehler beim Abrufen der Hütte:', err.message || err);
+    showNotification('❌ Fehler beim Löschen der Hütte.', 'bot');
+  });
+}
+  // 🔴 Live-Listener für wartende Fotos
+function initLivePendingFotos() {
+  db.collection('eierhuetten').onSnapshot(snapshot => {
+    const pending = [];
+
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      // nur Hütten, die mindestens 1 wartendes Foto haben
+      if (
+        Array.isArray(data.fotos) &&
+        data.fotos.some(f => f && typeof f === "object" && f.status === "wartet")
+      ) {
+        pending.push({ id: doc.id, ...data });
+      }
+    });
+
+    renderPendingFotos(pending);   // → deine bestehende Renderfunktion
+    showNotification('🔄 Live-Update: Wartende Fotos wurden aktualisiert.');
+  }, err => {
+    console.error("❌ Fehler beim Live-Update der wartenden Fotos:", err);
+  });
+}
+
+
+/*function scrollToHut(hutId) {
+  const target = document.getElementById(`hut-${hutId}`);
+  if (target) {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    target.classList.add("ring-4", "ring-yellow-400");
+    setTimeout(() => target.classList.remove("ring-4", "ring-yellow-400"), 2000);
+  }
+}*/
+  // global, damit Auswahl über Re-renders hinweg erhalten bleibt
+let pendingSelected = new Set();
+
+/**
+ * Rendert alle wartenden Fotos je Hütte als klickbare Thumbs.
+ * Klick auf ein Thumb => approveSingleFoto(hutId, originalIndex)
+ */
+function renderPendingFotos(list) {
+  const container = document.getElementById("pending-fotos");
+  container.innerHTML = "";
+
+  if (!Array.isArray(list) || list.length === 0) {
+    container.innerHTML = "<p class='italic text-gray-500'>Keine Fotos warten.</p>";
+    return;
+  }
+
+  // Filtere Hütten, die mindestens 1 wartendes Foto haben
+  const huettenMitPending = list.filter(h =>
+    Array.isArray(h.fotos) && h.fotos.some(f => f && typeof f === 'object' && f.status === 'wartet')
+  );
+
+  if (huettenMitPending.length === 0) {
+    container.innerHTML = "<p class='italic text-gray-500'>Keine Fotos warten.</p>";
+    return;
+  }
+
+  huettenMitPending.forEach(hut => {
+    // Erzeuge Liste von {f,i} mit originalem Index i
+    const wartende = (hut.fotos || [])
+      .map((f, i) => ({ f, i }))
+      .filter(item => item.f && typeof item.f === 'object' && item.f.status === 'wartet');
+
+    if (wartende.length === 0) return;
+
+    const card = document.createElement('div');
+    card.className = "bg-blue-50 border p-3 rounded mb-4";
+
+    // Header: Checkbox + Hüttentitel + Jump-Button
+    const header = document.createElement('div');
+    header.className = "flex justify-between items-center mb-2";
+
+    const label = document.createElement('label');
+    label.className = "flex items-center space-x-2";
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = pendingSelected.has(hut.id);
+    checkbox.addEventListener('change', (ev) => {
+      if (ev.target.checked) pendingSelected.add(hut.id);
+      else pendingSelected.delete(hut.id);
+    });
+
+    const title = document.createElement('span');
+    title.className = "font-semibold";
+    title.textContent = `${hut.name} – ${wartende.length} Foto(s)`;
+
+    label.appendChild(checkbox);
+    label.appendChild(title);
+    header.appendChild(label);
+
+    const btn = document.createElement('button');
+    btn.className = "bg-blue-600 text-white px-2 py-1 rounded";
+    btn.textContent = "🔎 Anzeigen";
+    btn.addEventListener('click', () => scrollToHut(hut.id)); // <-- nutzt showSection + scroll
+    header.appendChild(btn);
+
+    card.appendChild(header);
+
+    // Galerie
+    const gallery = document.createElement('div');
+    gallery.className = "flex flex-wrap gap-2";
+
+    wartende.forEach(item => {
+      const wrapper = document.createElement('div');
+      wrapper.className = "relative group";
+
+      const img = document.createElement('img');
+      img.src = item.f.url;
+      img.title = "Klicken zum Freigeben";
+      img.className = "w-24 h-24 object-cover rounded border cursor-pointer hover:ring-4 hover:ring-green-400";
+      img.addEventListener('click', async () => {
+        // optional: disable while working
+        img.style.opacity = '0.6';
+        try {
+          await approveSingleFoto(hut.id, item.i); // item.i = originaler Index
+          // optional: Entfernen des Thumbs nach erfolgreicher Freigabe:
+          wrapper.remove();
+        } catch (e) {
+          console.error(e);
+          showNotification('❌ Fehler beim Freigeben des Fotos.');
+          img.style.opacity = '1';
+        }
+      });
+
+      // optional overlay icon
+      const overlay = document.createElement('span');
+      overlay.className = "absolute top-1 right-1 bg-black/50 text-white text-xs px-1 rounded hidden group-hover:block";
+      overlay.textContent = "✅";
+
+      wrapper.appendChild(img);
+      wrapper.appendChild(overlay);
+      gallery.appendChild(wrapper);
+    });
+
+    card.appendChild(gallery);
+    container.appendChild(card);
+  });
+
+  // Massenfreigabe-Button
+  const massBtn = document.createElement('button');
+  massBtn.textContent = "✅ Ausgewählte Hütten freigeben";
+  massBtn.className = "mt-4 bg-green-600 text-white px-4 py-2 rounded";
+  massBtn.addEventListener('click', async () => {
+    if (pendingSelected.size === 0) {
+      showNotification('ℹ️ Keine Hütten ausgewählt.');
+      return;
+    }
+    massBtn.disabled = true;
+    for (const id of Array.from(pendingSelected)) {
+      await approveAllFotosForHut(id);
+    }
+    pendingSelected.clear();
+    massBtn.disabled = false;
+    showNotification('✅ Ausgewählte Fotos freigegeben.');
+  });
+  container.appendChild(massBtn);
+}
+  async function approveSingleFoto(hutId, fotoIndex) {
+  try {
+    const docRef = db.collection('eierhuetten').doc(hutId);
+    const snap = await docRef.get();
+    if (!snap.exists) {
+      showNotification('❌ Hütte nicht gefunden.');
+      return;
+    }
+
+    const fotos = Array.isArray(snap.data().fotos) ? snap.data().fotos.slice() : [];
+    const f = fotos[fotoIndex];
+    if (!f || typeof f === 'string') {
+      showNotification('ℹ️ Foto nicht gefunden oder bereits als String gespeichert.');
+      return;
+    }
+
+    // setze status
+    fotos[fotoIndex] = { ...f, status: 'freigegeben' };
+
+    await docRef.update({ fotos });
+
+    // Log
+    await docRef.collection('log').add({
+      admin: currentUser.displayName || currentUser.email,
+      feld: 'fotos',
+      wert: `Foto freigegeben: ${f.url}`,
+      zeitpunkt: new Date()
+    });
+
+    showNotification('✅ Foto freigegeben');
+    // optional: loadHuts(); aber wenn du onSnapshot nutzt, aktualisiert sich UI automatisch
+  } catch (err) {
+    console.error(err);
+    showNotification('❌ Fehler beim Freigeben.');
+    throw err;
+  }
+  }
+  function scrollToHut(hutId) {
+  // 1. Auf die Hütten-Section umschalten
+  showSection('huts');   // <- deine bestehende Funktion zum Anzeigen der richtigen Kategorie
+
+  // 2. Kurz warten, bis DOM gerendert ist, dann scrollen
+  setTimeout(() => {
+    const target = document.getElementById(`hut-${hutId}`);
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      target.classList.add("ring-4", "ring-yellow-400");
+      setTimeout(() => target.classList.remove("ring-4", "ring-yellow-400"), 2000);
+    } else {
+      console.warn("❗ Hütte mit ID", hutId, "nicht gefunden");
+    }
+  }, 300); // kleine Verzögerung (300 ms reicht)
+  }
+// Live-Update für neue Hütten
+function initLiveNewHuts() {
+  db.collection('eierhuetten')
+    .where('status', '==', 'offen')
+    .onSnapshot(snapshot => {
+      const neue = [];
+      snapshot.forEach(doc => {
+        neue.push({ id: doc.id, ...doc.data() });
+      });
+      renderNewEntries(neue);
+      showNotification('🔄 Live-Update: Neue Eintragungen wurden aktuallisiert.');
+      // Statistiken aktualisieren
+  const source = filteredHuts.length ? filteredHuts : allHuts;
+  renderStats(source);
+    }, err => {
+      console.error("❌ Fehler beim Live-Update der neuen Hütten:", err);
+    });
+}
+
+function renderNewEntries(list) {
+  const neueListe = document.getElementById("neueListe");
+  const neue = list.filter(h => h.status === "offen");
+  if (neue.length === 0) {
+    neueListe.innerHTML =
+      "<p class='italic text-gray-500'>Keine neuen Eintragungen.</p>";
+    return;
+  }
+
+  neueListe.innerHTML = "";
+  neue.forEach(hut => {
+    const row = document.createElement("div");
+    row.className =
+      "flex items-center justify-between bg-white shadow rounded px-3 py-2";
+
+    row.innerHTML = `
+      <a href="#hut-${hut.id}"
+         class="font-medium text-blue-600 hover:underline truncate max-w-[60%] block"
+         title="${hut.name}">
+         ${hut.name}
+      </a>
+      <div class="flex space-x-2 flex-shrink-0">
+        <button onclick="updateField('${hut.id}', 'status', 'angenommen')"
+                class="px-2 py-1 bg-green-500 text-white rounded whitespace-nowrap">
+          Annehmen
+        </button>
+        <button onclick="updateField('${hut.id}', 'status', 'abgelehnt')"
+                class="px-2 py-1 bg-red-500 text-white rounded whitespace-nowrap">
+          Ablehnen
+        </button>
+      </div>
+    `;
+    neueListe.appendChild(row);
+  });
+}
+   // Warten bis DOM geladen ist
+  document.addEventListener('DOMContentLoaded', () => {
+    firebase.auth().onAuthStateChanged(user => {
+      const nameEl = document.getElementById('user-name');
+      const topbar = document.getElementById('topbar');
+document.getElementById("search-input").addEventListener("input", applySearchAndSort);
+  document.getElementById("sortSelect").addEventListener("change", applySearchAndSort);
+
+      if (user) {
+        // Eingeloggt → Zeige Topbar
+        nameEl.textContent = user.displayName || user.email || 'Unbekannt';
+        topbar.style.display = 'flex';
+        ladeSupportTickets(); // ⬅️ Support-Anfragen laden
+        
+      } else {
+        // Nicht eingeloggt → Weiterleiten
+        //window.location.href = 'login.html'; // oder deine Login-Seite
+      }
+    });
+  });
+  
+function logout() {
+  firebase.auth().signOut().then(() => {
+    location.reload(); // Seite neu laden nach Logout
+  }).catch(error => {
+    alert('Fehler beim Abmelden: ' + error.message);
+  });
+}
+function goToMainPage() {
+  window.location.href = '/'; // Passe ggf. die URL an (z. B. '/index.html')
+}
+function refresh() {
+ location.reload(); // ⬅️ Das lädt die gesamte Seite neu
+}
+async function ladeSupportTickets() {
+  const snapshot = await db.collection('supportTickets').orderBy('createdAt', 'desc').get();
+  const body = document.getElementById('support-tickets-body');
+  body.innerHTML = '';
+
+  snapshot.forEach(doc => {
+    const ticket = doc.data();
+    const id = doc.id;
+    const datum = ticket.createdAt?.toDate().toLocaleString('de-DE') || '-';
+    const email = ticket.email || '-';
+    const status = ticket.status || 'offen';
+    const message = ticket.message || '(keine Nachricht)';
+
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td class="px-4 py-2 text-xs text-gray-600">${datum}</td>
+      <td class="px-4 py-2 text-xs">${email}</td>
+      <td class="px-4 py-2 text-sm">${message}</td>
+      <td class="px-4 py-2">
+        <select onchange="updateSupportStatus('${id}', this.value)" class="border rounded px-2 py-1 text-sm">
+          ${['offen', 'bearbeitet', 'archiviert'].map(opt => `
+            <option value="${opt}" ${opt === status ? 'selected' : ''}>${opt}</option>
+          `).join('')}
+        </select>
+      </td>
+      <td class="px-4 py-2 space-x-2">
+        <button onclick="mailtoSupport('${email}', \`${message.replace(/`/g, "'")}\`)" class="bg-blue-600 text-white text-xs px-2 py-1 rounded">Antworten</button>
+        <button onclick="loescheSupportTicket('${id}')" class="bg-red-600 text-white text-xs px-2 py-1 rounded">Löschen</button>
+      </td>
+    `;
+    body.appendChild(row);
+  });
+}
+
+  function mailtoSupport(email, message) {
+  const subject = 'Supportanfrage zu Eierhütten-Tour';
+  const body = `Hallo,\n\nzu deiner Supportanfrage:\n\n"${message}"\n\nAntwort:\n\n[Hier deine Antwort einfügen]`;
+  window.open(`mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+}
+
+async function updateSupportStatus(id, neuerStatus) {
+  await db.collection('supportTickets').doc(id).update({ status: neuerStatus });
+  showNotification('✅ Status aktualisiert');
+}
+
+async function loescheSupportTicket(id) {
+  if (!confirm('Dieses Support-Ticket wirklich löschen?')) return;
+  await db.collection('supportTickets').doc(id).delete();
+  showNotification('🗑️ Support-Ticket gelöscht');
+  ladeSupportTickets();
+}
+ /* async function ladeSupportAnfragen() {
+  const snapshot = await db.collection('supportTickets').orderBy('zeitpunkt', 'desc').limit(100).get();
+  const body = document.getElementById('support-body');
+  body.innerHTML = ''; // Tabelle leeren
+
+  snapshot.forEach(doc => {
+    const anfrage = doc.data();
+    const zeile = document.createElement('tr');
+
+    zeile.innerHTML = `
+      <td class="px-4 py-2 text-xs text-gray-600">${anfrage.zeitpunkt?.toDate().toLocaleString('de-DE') || '-'}</td>
+      <td class="px-4 py-2">${anfrage.nachricht || '(leer)'}</td>
+      <td class="px-4 py-2">${anfrage.status || 'offen'}</td>
+      <td class="px-4 py-2 space-x-2">
+        <button onclick="archiviereSupport('${doc.id}')" class="text-sm bg-green-600 text-white px-2 py-1 rounded">Archivieren</button>
+        <button onclick="loescheSupport('${doc.id}')" class="text-sm bg-red-600 text-white px-2 py-1 rounded">Löschen</button>
+      </td>
+    `;
+
+    body.appendChild(zeile);
+  });
+  }
+  async function archiviereSupport(id) {
+  await db.collection('supportTickets').doc(id).update({ status: 'archiviert' });
+  showNotification('📁 Support-Anfrage archiviert.');
+  ladeSupportAnfragen();
+}
+
+async function loescheSupport(id) {
+  if (!confirm('Möchtest du diese Support-Anfrage wirklich löschen?')) return;
+  await db.collection('supportTickets').doc(id).delete();
+  showNotification('🗑️ Support-Anfrage gelöscht.');
+  ladeSupportAnfragen();
+}*/
+
+//Profil:
+
+let currentProfileId = null;
+
+async function loadProfileAdmin() {
+  const query = document.getElementById("profile-search").value.trim();
+  if (!query) return alert("Bitte ID oder Name eingeben.");
+
+  let snap = await db.collection("profiles").doc(query).get();
+  if (!snap.exists) {
+    const q = await db.collection("profiles").where("name","==",query).get();
+    if (q.empty) return alert("Kein Profil gefunden!");
+    snap = q.docs[0];
+  }
+  const data = snap.data();
+  currentProfileId = snap.id;
+
+  // Grunddaten setzen
+  document.getElementById("profile-admin-area").classList.remove("hidden");
+  document.getElementById("profile-pic-admin").src = data.pic || "default.jpg";
+  document.getElementById("profile-pic-url").value = data.pic || "";
+  document.getElementById("profile-name-admin").value = data.name || "";
+  document.getElementById("profile-bio-admin").value = data.bio || "";
+  document.getElementById("profile-role-admin").value = data.role || "user";
+  document.getElementById("profile-banned-admin").checked = data.banned || false;
+
+  // Stats
+  document.getElementById("profile-stats").textContent =
+    `Fahrten: ${data.rides || 0} | Km: ${data.km || 0} | Letzter Login: ${data.lastLogin || "–"}`;
+
+  // Titel laden
+  const titleSel = document.getElementById("profile-title-admin");
+  titleSel.innerHTML = "<option value=''>Kein Titel</option>";
+  const titleSnap = await db.collection("titles").get();
+  titleSnap.forEach(doc => {
+    const t = doc.data();
+    const opt = document.createElement("option");
+    opt.value = t.name;
+    opt.textContent = t.name;
+    titleSel.appendChild(opt);
+  });
+  titleSel.value = data.title || "";
+
+  // Abzeichen laden
+  const badgeContainer = document.getElementById("profile-badges-admin");
+  badgeContainer.innerHTML = "";
+  const badgeSnap = await db.collection("badgesDefs").get();
+  badgeSnap.forEach(doc => {
+    const b = doc.data();
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.value = doc.id;
+    chk.checked = (data.badges || []).includes(doc.id);
+    badgeContainer.appendChild(chk);
+    const lbl = document.createElement("label");
+    lbl.textContent = `${b.icon || "🏅"} ${b.name}`;
+    badgeContainer.appendChild(lbl);
+  });
+}
+
+async function saveProfileAdmin() {
+  if (!currentProfileId) return;
+  const badges = [...document.querySelectorAll("#profile-badges-admin input:checked")].map(i => i.value);
+
+  await db.collection("profiles").doc(currentProfileId).update({
+    name: document.getElementById("profile-name-admin").value,
+    pic: document.getElementById("profile-pic-url").value,
+    bio: document.getElementById("profile-bio-admin").value,
+    title: document.getElementById("profile-title-admin").value,
+    role: document.getElementById("profile-role-admin").value,
+    banned: document.getElementById("profile-banned-admin").checked,
+    badges: badges
+  });
+
+  alert("✔️ Profil gespeichert!");
+}
+
+async function deleteProfileAdmin() {
+  if (!currentProfileId) return;
+  if (!confirm("Soll dieses Profil wirklich gelöscht werden?")) return;
+  await db.collection("profiles").doc(currentProfileId).delete();
+  alert("🗑️ Profil gelöscht!");
+  document.getElementById("profile-admin-area").classList.add("hidden");
+}
+
+function openProfileLink() {
+  if (!currentProfileId) return;
+  window.open(`https://deine-app.web.app/profile.html?id=${currentProfileId}`, "_blank");
+}
+
+async function addGlobalTitle() {
+  const title = document.getElementById("global-title").value.trim();
+  if (!title) return;
+  await db.collection("titles").add({ name: title, createdAt: new Date() });
+  alert("➕ Titel hinzugefügt!");
+}
+
+async function addGlobalBadge() {
+  const badge = document.getElementById("global-badge").value.trim();
+  if (!badge) return;
+  await db.collection("badgesDefs").add({ name: badge, createdAt: new Date() });
+  alert("🏅 Abzeichen hinzugefügt!");
+}
+// ---- TITEL Verwaltung ----
+(() => {
+  const titleList = document.getElementById("title-list");
+  const titleForm = document.getElementById("title-form");
+  const nameEl = document.getElementById("title-name");
+  const condEl = document.getElementById("title-condition");
+  const valEl  = document.getElementById("title-value");
+  let titleEditId = null;
+
+  async function loadTitles() {
+    if (!titleList) return;
+    const snap = await db.collection("titles").get();
+    titleList.innerHTML = "";
+    snap.forEach(doc => {
+      const t = doc.data();
+      const row = document.createElement("div");
+      row.className = "p-2 border rounded flex justify-between items-center";
+      row.innerHTML = `
+        <span><strong>${t.name}</strong> — Regel: ${t.conditionType} ≥ ${t.conditionValue}</span>
+        <div class="space-x-2">
+          <button class="px-2 py-1 bg-blue-600 text-white rounded" onclick="editTitle('${doc.id}')">✏️</button>
+          <button class="px-2 py-1 bg-red-600 text-white rounded" onclick="deleteTitle('${doc.id}')">🗑️</button>
+        </div>`;
+      titleList.appendChild(row);
+    });
+  }
+
+  // Für Inline-Handler verfügbar machen:
+  window.editTitle = async function(id) {
+    const doc = await db.collection("titles").doc(id).get();
+    const t = doc.data();
+    titleEditId = id;
+    if (nameEl) nameEl.value = t.name || "";
+    if (condEl) condEl.value = t.conditionType || "rides";
+    if (valEl)  valEl.value = t.conditionValue ?? 0;
+  };
+
+  window.deleteTitle = async function(id) {
+    if (!confirm("Diesen Titel wirklich löschen?")) return;
+    await db.collection("titles").doc(id).delete();
+    // Optionales Aufräumen in Profilen (falls du titleId speicherst):
+    // const q = await db.collection("profiles").where("titleId","==",id).get();
+    // const batch = db.batch(); q.forEach(d=>batch.update(d.ref,{title:null, titleId:null})); await batch.commit();
+    await loadTitles();
+  };
+
+  if (titleForm) {
+    titleForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const payload = {
+        name: (nameEl?.value || "").trim(),
+        conditionType: condEl?.value || "rides",
+        conditionValue: parseInt(valEl?.value || "0", 10) || 0
+      };
+      if (!payload.name) { alert("Bitte einen Titel-Namen angeben."); return; }
+
+      if (titleEditId) {
+        await db.collection("titles").doc(titleEditId).update(payload);
+        titleEditId = null;
+      } else {
+        await db.collection("titles").add(payload);
+      }
+      if (titleForm) titleForm.reset();
+      await loadTitles();
+    });
+  }
+
+  // Initial laden
+  document.addEventListener("DOMContentLoaded", loadTitles);
+})();
+
+// ---- ABZEICHEN Verwaltung ----
+(() => {
+  const badgeList = document.getElementById("badge-list-admin");
+  const badgeForm = document.getElementById("badge-form");
+  const nameEl = document.getElementById("badge-name");
+  const iconEl = document.getElementById("badge-icon");
+  const condEl = document.getElementById("badge-condition");
+  const valEl  = document.getElementById("badge-value");
+  let badgeEditId = null;
+
+async function loadBadges() {
+  const snap = await db.collection("badgesDefs").get();
+  const list = document.getElementById("badge-list-admin");
+  list.innerHTML = "";
+
+  snap.forEach(doc => {
+    const b = doc.data();
+    const displayIcon = b.iconUrl
+      ? `<img src="${b.iconUrl}" class="w-6 h-6 inline-block rounded" />`
+      : (b.icon || "🏅");
+
+    list.innerHTML += `
+      <div class="p-2 border rounded flex justify-between items-center">
+        <span>${displayIcon} <strong>${b.name}</strong> — Regel: ${b.conditionType} ≥ ${b.conditionValue}</span>
+        <div class="space-x-2">
+          <button onclick="editBadge('${doc.id}')" class="px-2 py-1 bg-blue-600 text-white rounded">✏️</button>
+          <button onclick="deleteBadge('${doc.id}')" class="px-2 py-1 bg-red-600 text-white rounded">🗑️</button>
+        </div>
+      </div>
+    `;
+  });
+}
+
+
+
+  window.editBadge = async function(id) {
+    const doc = await db.collection("badgesDefs").doc(id).get();
+    const b = doc.data();
+    badgeEditId = id;
+    if (nameEl) nameEl.value = b.name || "";
+    if (iconEl) iconEl.value = b.icon || "";
+    if (condEl) condEl.value = b.conditionType || "rides";
+    if (valEl)  valEl.value = b.conditionValue ?? 0;
+  };
+
+  window.deleteBadge = async function(id) {
+    if (!confirm("Dieses Abzeichen wirklich löschen?")) return;
+    await db.collection("badgesDefs").doc(id).delete();
+    await loadBadges();
+  };
+
+  if (badgeForm) {
+    badgeForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("badge-name").value.trim();
+      const emojiFallback = document.getElementById("badge-icon").value.trim();
+      const conditionType = document.getElementById("badge-condition").value;
+      const conditionValue = parseInt(document.getElementById("badge-value").value) || 0;
+    
+      if (!name) return alert("Bitte Abzeichen-Namen eingeben!");
+    
+      let iconUrl = "";
+      const fileInput = document.getElementById("badge-icon-file");
+      if (fileInput.files.length > 0) {
+        try {
+          iconUrl = await badgeFormUploadToImgBB(fileInput.files[0]);
+        } catch (err) {
+          console.error(err);
+          alert("❌ Fehler beim ImgBB-Upload");
+        }
+      }
+    
+      await db.collection("badgesDefs").add({
+        name,
+        icon: emojiFallback,
+        iconUrl,
+        conditionType,
+        conditionValue,
+        createdAt: new Date()
+      });
+    
+      alert("✅ Abzeichen gespeichert");
+      e.target.reset();
+      loadBadges();
+    });
+  }
+async function badgeFormUploadToImgBB(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result.split(",")[1];
+      const formData = new FormData();
+      formData.append("key", "5df04de9bfd2776f101329be4193e44c"); // imgbb API-Key hier einsetzen
+      formData.append("image", base64);
+
+      try {
+        const res = await fetch("https://api.imgbb.com/1/upload", { method: "POST", body: formData });
+        const json = await res.json();
+        if (json?.data?.url) resolve(json.data.url);
+        else reject("❌ ImgBB Fehler");
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject("❌ Datei konnte nicht gelesen werden.");
+    reader.readAsDataURL(file);
+  });
+}
+
+  document.addEventListener("DOMContentLoaded", loadBadges);
+  
+  document.getElementById('profile-search').addEventListener('input', async e => {
+  const q = e.target.value.trim();
+  const box = document.getElementById('profile-suggestions');
+  if (q.length < 3) { box.classList.add('hidden'); return; }
+
+  const snap = await db.collection('profiles')
+    .where('name', '>=', q)
+    .where('name', '<=', q + '\uf8ff')
+    .limit(5).get();
+
+  box.innerHTML = snap.empty
+    ? "<p class='p-2 text-gray-500 italic'>Keine Treffer</p>"
+    : snap.docs.map(d => {
+        const name = d.data().name;
+        return `
+          <div class="p-2 hover:bg-gray-100 cursor-pointer"
+               onclick="selectProfile('${d.id}', '${name.replace(/'/g,"\\'")}')">
+            ${name}
+          </div>`;
+      }).join('');
+  box.classList.remove('hidden');
+});
+
+window.selectProfile = (id, name) => {
+  document.getElementById('profile-search').value = name;
+  document.getElementById('profile-selected-id').value = id;
+  document.getElementById('profile-suggestions').classList.add('hidden');
+  loadProfileAdmin(id); // <-- jetzt sicher die ID verwenden
+};
+
+
+document.getElementById('menu-toggle').addEventListener('click', () => {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.toggle('hidden');
+});
+
+})();
+
+
+
+</script>
+</body>
+  </html>
