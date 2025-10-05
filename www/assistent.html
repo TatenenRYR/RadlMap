@@ -1,0 +1,2402 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Hütten Assistent – Komplett</title>
+
+  <!-- Firebase (compat, wie in deinem Projekt) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Leaflet (Karten) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Quill (WYSIWYG für Beschreibung) -->
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; }
+    .card-option { transition: transform .16s, box-shadow .16s; }
+    .card-option:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(0,0,0,.08); }
+    .selected { border: 2px solid #10b981; background-color: #ecfdf5; }
+    .minimap {
+  height: 200px;
+  z-index: 0;
+}
+.leaflet-container {
+  z-index: 0 !important;
+}
+    /* Small helper for fixed bottom nav on small screens */
+    @media (max-width: 767px) {
+      #question-area { padding-bottom: 92px; } /* space for fixed nav */
+    }
+    @media (min-width: 768px) {
+      #question-area { padding-bottom: 92px; }
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+<!-- Login Screen -->
+<div id="loginScreen" class="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-green-100 hidden">
+  <div class="bg-white rounded-2xl shadow-xl p-10 max-w-md w-full text-center transform transition hover:scale-[1.01]">
+    
+    <!-- Illustration -->
+    <div class="flex justify-center mb-6">
+      <img src="https://radlmap.net/img/login.png" 
+           class="w-64 h-64 drop-shadow-lg" 
+           alt="Funny Hut" />
+    </div>
+
+    <!-- Titel -->
+    <h1 class="text-3xl font-extrabold text-green-700 mb-3">
+      Hütten-Assistent
+    </h1>
+    <p class="text-gray-500 mb-8">
+      Verwalte deine <span class="font-semibold text-green-600">Hütten</span> ganz einfach online.<br>
+      Bitte melde dich mit deinem Google-Konto an.
+    </p>
+
+    <!-- Google Login Button -->
+    <button onclick="doGoogleLogin()" 
+      class="flex items-center gap-3 px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl shadow-md transition w-full justify-center font-medium">
+      <img src="https://www.svgrepo.com/show/475656/google-color.svg" 
+           class="w-6 h-6 bg-white rounded-full p-1" />
+      <span>Mit Google anmelden</span>
+    </button>
+
+    <!-- Fußnote -->
+    <p class="text-xs text-gray-400 mt-6">
+      🔒 Deine Daten bleiben sicher und werden nicht ohne Zustimmung geteilt.
+    </p>
+  </div>
+</div>
+
+
+  <div id="mainApp" class="flex min-h-screen hidden">
+
+    
+    <!-- Sidebar -->
+<aside id="sidebar" class="fixed md:static inset-y-0 left-0 w-64 bg-white border-r p-6 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform z-50 shadow-lg">
+
+  <!-- Profilbereich -->
+  <div class="flex flex-col items-center mb-8">
+    <div id="avatarWrapper" class="w-20 h-20 rounded-full overflow-hidden border-2 border-green-500 mb-3 bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center text-white text-2xl font-bold">
+      <img id="profilePic" src="" alt="Profilbild" class="w-full h-full object-cover hidden">
+      <span id="avatarInitials"></span>
+    </div>
+    <p class="text-sm text-gray-600">Angemeldet als:</p>
+    <p id="accountMail" class="text-green-700 font-semibold">-</p>
+    <button class="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition" onclick="logout()">Logout</button>
+  </div>
+
+  <!-- Logo / App-Name -->
+  <div class="text-2xl font-extrabold text-green-700 mb-6 text-center">🌿 Assistent</div>
+
+  <!-- Navigationsbuttons -->
+  <nav class="flex flex-col gap-2">
+    <a href="https://radlmap.net" 
+   id="btnEntries"
+   class="sidebar-btn w-full text-left px-4 py-2 rounded-lg hover:bg-green-50 flex items-center gap-2 transition">
+  🚲 Startseite
+    </a>
+    <a href="navi.html" 
+   id="btnEntries"
+   class="sidebar-btn w-full text-left px-4 py-2 rounded-lg hover:bg-green-50 flex items-center gap-2 transition">
+  🚴‍♂️ zur RadlMap
+    </a>
+    <button id="btnEntries" class="sidebar-btn w-full text-left px-4 py-2 rounded-lg hover:bg-green-50 flex items-center gap-2 transition" onclick="setActive('btnEntries'); showMyEntries()">📋 Meine Eintragungen</button>
+    <button id="btnNewEntry" class="sidebar-btn w-full text-left px-4 py-2 rounded-lg hover:bg-green-50 flex items-center gap-2 transition" onclick="setActive('btnNewEntry'); startNewEntry()">➕ Neue Eintragung</button>
+    <button id="btnSupport" class="sidebar-btn w-full text-left px-4 py-2 rounded-lg hover:bg-green-50 flex items-center gap-2 transition" onclick="setActive('btnSupport'); openSupport()">💬 Support</button>
+    <button id="btnHutMessages" class="sidebar-btn w-full text-left px-4 py-2 rounded-lg hover:bg-green-50 flex items-center gap-2 transition" onclick="setActive('btnHutMessages'); showHutMessages()">💬 Hütten-Nachrichten <span id="hutMessagesCount" class="ml-2 hidden bg-red-600 text-white text-xs px-2 py-0.5 rounded-full">0</span></button>
+  </nav>
+
+  <!-- Footer -->
+  <div class="mt-auto text-center text-xs text-gray-400 pt-4 border-t border-gray-200">
+    v1.0 – Komplett
+  </div>
+</aside>
+    <!-- Rechte Info-Leiste -->
+<!-- Info Sidebar -->
+<div id="infoSidebar" class="hidden lg:block w-72 p-4 bg-gray-50 border-l">
+  <div class="sticky top-4">
+    <h3 class="text-lg font-bold mb-3">ℹ️ Hilfe & Beispiele</h3>
+    <div id="infoBox" class="space-y-3 text-sm text-gray-700"></div>
+  </div>
+</div>
+
+<!-- Mobile Overlay -->
+<div id="infoOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+  <div class="absolute bottom-0 w-full bg-white p-4 rounded-t-2xl shadow-lg max-h-[80vh] overflow-y-auto">
+    <button id="closeInfo" class="absolute top-2 right-2 text-gray-600">✕</button>
+    <h3 class="text-lg font-bold mb-3">ℹ️ Hilfe & Beispiele</h3>
+    <div id="infoBoxMobile" class="space-y-3 text-sm text-gray-700"></div>
+  </div>
+</div>
+
+<!-- Button nur für Mobile -->
+<button id="toggleInfo" class="lg:hidden fixed bottom-20 right-4 bg-blue-500 text-white p-3 rounded-full shadow-lg">
+  ℹ️
+</button>
+
+<script>
+  // Entfernt vorherige aktive Buttons und markiert den aktuellen
+  function setActive(buttonId) {
+    const buttons = document.querySelectorAll('.sidebar-btn');
+    buttons.forEach(btn => btn.classList.remove('bg-green-100', 'font-semibold'));
+    const activeBtn = document.getElementById(buttonId);
+    if(activeBtn) {
+      activeBtn.classList.add('bg-green-100', 'font-semibold');
+    }
+  }
+</script>
+
+    <!-- Main -->
+    <main class="flex-1 flex flex-col">
+      <!-- topbar mobile -->
+      <div class="md:hidden flex items-center justify-between bg-white border-b p-3">
+        <div class="font-bold text-green-700">Assistent</div>
+        <button class="p-2 bg-green-600 text-white rounded" onclick="toggleSidebar()">☰</button>
+      </div>
+
+      <!-- progressbar -->
+      <div class="w-full h-2 bg-gray-200">
+        <div id="progress" class="h-2 bg-green-500 w-0 transition-all"></div>
+      </div>
+
+      <!-- question area -->
+      <section id="question-area" class="flex-1 p-6 overflow-y-auto">
+        <!-- dynamic content -->
+      </section>
+
+      <!-- fixed bottom nav -->
+      <div id="navBottom" class="fixed bottom-0 left-0 md:left-64 right-0 flex justify-between p-4 border-t bg-white z-40">
+        <button id="prevBtn" class="px-4 py-2 bg-gray-200 rounded" onclick="prevStep()">⬅️ Zurück</button>
+        <button id="nextBtn" class="px-4 py-2 bg-green-600 text-white rounded" onclick="nextStep()">Weiter ➡️</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Notification area -->
+  <div id="toast" class="fixed top-6 right-6 hidden p-3 rounded shadow bg-blue-600 text-white z-50"></div>
+
+  <script>
+  /***********************
+   * Config & Init
+   ***********************/
+  // Firebase config (aus deinem Admin-File)
+  const firebaseConfig = {
+    apiKey: "AIzaSyAu39z49KEJy9zso-etFIScmaFnWw8vhro",
+    authDomain: "eierhuettentour.firebaseapp.com",
+    projectId: "eierhuettentour",
+    storageBucket: "eierhuettentour.appspot.com",
+    messagingSenderId: "348272135205",
+    appId: "1:348272135205:web:f39a7d26d927fbf28dc3cc"
+  };
+
+  // imgbb API key (wie in Admin-Code verwendet)
+  const IMGBB_KEY = "5df04de9bfd2776f101329be4193e44c";
+
+  // Init firebase
+    
+  let app, db;
+  try {
+    app = firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+  } catch (e) {
+    console.error("Firebase init error", e);
+    document.getElementById('question-area').innerHTML = `<div class="bg-red-100 p-4 rounded">❌ Firebase konnte nicht initialisiert werden. Prüfe die Konfiguration in der Datei.</div>`;
+  }
+
+  // Demo user: in deinem Produktivbetrieb sollte hier auth.onAuthStateChanged triggern
+  let currentUser = { uid: "demo", email: "demo@example.com", displayName: "Demo" };
+firebase.auth().onAuthStateChanged(u => {
+  if (u) {
+    currentUser = u;
+    document.getElementById("accountMail").textContent = u.email;
+    document.getElementById("loginScreen").classList.add("hidden");
+    document.getElementById("mainApp").classList.remove("hidden");
+
+    // Sidebar geschlossen halten
+    document.getElementById('sidebar').classList.add('-translate-x-full');
+
+    mode = "list";
+document.getElementById("navBottom").style.display =
+  (mode === "entry") ? "flex" : "none";
+    
+    // Tutorial-Startseite zeigen
+    showTutorial();
+initHutMessagesBadge();
+  } else {
+    // nicht eingeloggt
+    document.getElementById("mainApp").classList.add("hidden");
+    document.getElementById("loginScreen").classList.remove("hidden");
+    document.getElementById("question-area").innerHTML = "";
+  }
+});
+    async function doGoogleLogin() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try {
+    await firebase.auth().signInWithPopup(provider);
+    showToast("✅ Eingeloggt mit Google");
+    
+  } catch (e) {
+    console.error("Google Login error", e);
+    alert("Fehler beim Google-Login: " + e.message);
+  }
+    }
+
+function logout() {
+  firebase.auth().signOut();
+}
+    let mode = "entry"; // "entry" oder "list"
+  /***********************
+   * State & steps
+   ***********************/
+  let editingData = {};
+  let step = 0;
+  const stepsCount = 11; // 0..9
+
+  function showToast(text, time = 3000) {
+    const t = document.getElementById('toast');
+    t.textContent = text;
+    t.classList.remove('hidden');
+    setTimeout(()=>{ t.classList.add('hidden'); }, time);
+  }
+
+  function updateProgress() {
+    const pct = (step / (stepsCount - 1)) * 100;
+    document.getElementById('progress').style.width = pct + '%';
+  }
+
+  /***********************
+   * Render Flow (Questions)
+   ***********************/
+          // Texte für Step 2 je nach Typ
+const typeTexts = {
+  Eierhütte: {
+    title: "🏷️ Name der Eierhütte",
+    question: "Wie soll deine Eierhütte heißen?"
+  },
+  Hofladen: {
+    title: "🏷️ Name des Hofladens",
+    question: "Wie soll dein Hofladen heißen?"
+  },
+  Selbstbedienung: {
+    title: "🏷️ Name des Selbstbedienungshäuschens",
+    question: "Wie soll dein Selbstbedienungshäuschen heißen?"
+  },
+  Spielplatz: {
+    title: "🏷️ Name des Spielplatzes",
+    question: "Wie soll der Spielplatz heißen?"
+  },
+  Abenteuerhof: {
+    title: "🏷️ Name des Abenteuerhofs",
+    question: "Wie soll dein Abenteuerhof heißen?"
+  },
+  Automat: {
+    title: "🏷️ Name des Automaten",
+    question: "Wie soll dein Automat heißen?"
+  }
+};
+  function renderQuestion() {
+    const qa = document.getElementById('question-area');
+    qa.innerHTML = ''; // reset
+    updateProgress();
+    updateInfoBox();
+document.getElementById("navBottom").style.display =
+  (mode === "entry") ? "flex" : "none";
+      
+    try {
+      if (step === 0) {
+  qa.innerHTML = `
+    <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+      <h2 class="text-xl font-bold mb-3">🛡️ Datenschutzerklärung</h2>
+
+      <!-- Scrollbox mit horizontalem + vertikalem Scroll -->
+      <div id="dsScrollBox" class="h-60 mb-3 rounded-lg overflow-auto border border-gray-200">
+        <iframe 
+          src="https://radlmap.net/datenschutz.html" 
+          class="w-full h-[500px] border-0 bg-white"
+          style="display:block; min-width:100%; overflow:auto;">
+        </iframe>
+      </div>
+
+      <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+        <input id="dsCheck" type="checkbox" class="w-4 h-4" disabled /> 
+        Ich akzeptiere die Datenschutzerklärung
+      </label>
+      <div id="dsHint" class="text-xs text-red-500 mt-1">
+        ⬇️ Bitte bis ganz nach unten scrollen
+      </div>
+    </div>`;
+
+  // Scroll-Überwachung
+  const scrollBox = document.getElementById("dsScrollBox");
+  const check = document.getElementById("dsCheck");
+  const hint = document.getElementById("dsHint");
+
+  scrollBox.addEventListener("scroll", () => {
+    if (scrollBox.scrollTop + scrollBox.clientHeight >= scrollBox.scrollHeight - 5) {
+      check.disabled = false;
+      hint.textContent = "✅ Du kannst nun die Datenschutzerklärung akzeptieren.";
+      hint.classList.remove("text-red-500");
+      hint.classList.add("text-green-600");
+    }
+  });
+  return;
+}
+      if (step === 1) {
+        // Typ-Auswahl
+        const opts = [
+          { emoji: '🥚', label: 'Eierhütte', key: 'Eierhütte' },
+          { emoji: '🏪', label: 'Hofladen', key: 'Hofladen' },
+          { emoji: '🏠', label: 'Selbstbedienungshäuschen', key: 'Selbstbedienung' },
+          { emoji: '🛝', label: 'Spielplatz', key: 'Spielplatz' },
+          { emoji: '🌄', label: 'Abenteuerhof', key: 'Abenteuerhof' },
+          { emoji: '🍶', label: 'Automat', key: 'Automat' }
+        ];
+        const wrap = document.createElement('div');
+        wrap.className = 'grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto';
+        opts.forEach(o => {
+          const card = document.createElement('div');
+          card.className = 'bg-white p-6 rounded-xl shadow card-option text-center cursor-pointer';
+          card.innerHTML = `<div class="text-3xl">${o.emoji}</div><div class="font-semibold mt-2">${o.label}</div>`;
+          card.onclick = () => {
+            document.querySelectorAll('.card-option').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            editingData.typ = o.key;
+          };
+          wrap.appendChild(card);
+        });
+        qa.appendChild(wrap);
+        return;
+      }
+
+
+
+if (step === 2) {
+  const currentType = editingData.typ; // <-- statt eintragung.type
+  const { title, question } = typeTexts[currentType] || {
+    title: "🏷️ Name",
+    question: "Wie soll dein Eintrag heißen?"
+  };
+
+  qa.innerHTML = `
+    <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+      <h2 class="text-lg font-bold mb-2">${title}</h2>
+      <p class="text-sm text-gray-600 mb-2">${question}</p>
+      <input id="nameInput"
+             class="w-full border p-2 rounded"
+             placeholder="Name eingeben"
+             value="${editingData.name || ''}">
+    </div>`;
+  return;
+}
+
+      if (step === 3) {
+        qa.innerHTML = `
+          <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+            <h2 class="text-lg font-bold mb-2">🪑 Gibt es Sitzplätze?</h2>
+            <div class="flex gap-4">
+              <button class="flex-1 p-3 border rounded" onclick="selectOption('sitzplaetze','Ja',this)">✅ Ja</button>
+              <button class="flex-1 p-3 border rounded" onclick="selectOption('sitzplaetze','Nein',this)">❌ Nein</button>
+            </div>
+          </div>`;
+        return;
+      }
+
+      if (step === 4) {
+        qa.innerHTML = `
+          <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+            <h2 class="text-lg font-bold mb-2">🔌 Gibt es Strom?</h2>
+            <div class="flex gap-4">
+              <button class="flex-1 p-3 border rounded" onclick="selectOption('strom','Ja',this)">⚡ Ja</button>
+              <button class="flex-1 p-3 border rounded" onclick="selectOption('strom','Nein',this)">❌ Nein</button>
+            </div>
+          </div>`;
+        return;
+      }
+      if (step === 5) {
+  const immer = editingData.oeffnungszeiten === "Immer geöffnet";
+
+  qa.innerHTML = `
+    <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+      <h2 class="text-lg font-bold mb-3">🕒 Öffnungszeiten</h2>
+
+      <label class="flex items-center gap-2 mb-4">
+        <input type="checkbox" id="immerCheck" ${immer ? "checked" : ""}>
+        Immer geöffnet
+      </label>
+
+      <div id="dayInputs" class="${immer ? "hidden" : ""}">
+        ${["Mo","Di","Mi","Do","Fr","Sa","So"].map(day => {
+          // vorhandene Werte beim Bearbeiten einsetzen
+          let von = "", bis = "";
+          if (Array.isArray(editingData.oeffnungszeiten)) {
+            const found = editingData.oeffnungszeiten.find(x => x.tag === day);
+            if (found) { von = found.von; bis = found.bis; }
+          }
+          return `
+            <div class="flex items-center gap-2 mb-1">
+              <span class="w-10">${day}</span>
+              <input id="open-${day}-von" type="time" value="${von}" class="border p-1 rounded text-sm">
+              <span>-</span>
+              <input id="open-${day}-bis" type="time" value="${bis}" class="border p-1 rounded text-sm">
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+
+  document.getElementById("immerCheck").addEventListener("change", (e) => {
+    document.getElementById("dayInputs").classList.toggle("hidden", e.target.checked);
+  });
+
+  return;
+      }
+      
+
+      if (step === 6) {
+        qa.innerHTML = `
+          <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+            <h2 class="text-lg font-bold mb-2">✨ Extras (optional)</h2>
+            <input id="extrasInput" class="w-full border p-2 rounded" placeholder="z.B. Getränke, Kühlschrank" value="${editingData.extras || ''}">
+          </div>`;
+        return;
+      }
+
+      if (step === 7) {
+        // Tiere toggle buttons (markieren, don't auto-next)
+        const animals = ["🐐 Ziege","🐄 Kuh","🐓 Huhn","🐕 Hund","🐇 Hase","🐈 Katze","Keine Tiere"];
+        const grid = document.createElement('div');
+        grid.className = 'bg-white p-6 rounded-xl shadow max-w-2xl mx-auto';
+        grid.innerHTML = `<h2 class="text-lg font-bold mb-3">🐾 Welche Tiere gibt es?</h2><div id="tiereGrid" class="grid grid-cols-3 gap-2"></div>`;
+        qa.appendChild(grid);
+        const holder = document.getElementById('tiereGrid');
+        editingData.tiere = editingData.tiere || [];
+        animals.forEach(t => {
+          const btn = document.createElement('button');
+          const isSel = editingData.tiere.includes(t);
+          btn.className = `p-2 border rounded text-sm ${isSel ? 'selected' : ''}`;
+          btn.textContent = t;
+          btn.onclick = () => {
+            // toggle
+            if (t === 'Keine Tiere') {
+              editingData.tiere = ['Keine Tiere'];
+              // remove selected from others
+              holder.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+              btn.classList.add('selected');
+              return;
+            }
+            // if 'Keine Tiere' present -> remove it
+            editingData.tiere = (editingData.tiere || []).filter(x => x !== 'Keine Tiere');
+            const idx = (editingData.tiere || []).indexOf(t);
+            if (idx >= 0) {
+              editingData.tiere.splice(idx, 1);
+              btn.classList.remove('selected');
+            } else {
+              editingData.tiere.push(t);
+              btn.classList.add('selected');
+            }
+          };
+          holder.appendChild(btn);
+        });
+        return;
+      }
+
+      if (step === 8) {
+        qa.innerHTML = `
+          <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+            <h2 class="text-lg font-bold mb-2">📝 Beschreibung</h2>
+            <div id="quillContainer" class="bg-white"></div>
+          </div>`;
+        setTimeout(() => {
+          // initialize quill and set content if exists
+          const quill = new Quill('#quillContainer', { theme: 'snow' });
+          if (editingData.beschreibung) quill.root.innerHTML = editingData.beschreibung;
+          // store on change
+          quill.on('text-change', () => { editingData.beschreibung = quill.root.innerHTML; });
+        }, 120);
+        return;
+      }
+
+      if (step === 9) {
+        qa.innerHTML = `
+          <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+            <h2 class="text-lg font-bold mb-2">🏷️ Schlagwörter (Komma getrennt)</h2>
+            <input id="tagsInput" class="w-full border p-2 rounded" placeholder="z.B. Frühstück,Schattig" value="${(editingData.tags||[]).join(', ')}">
+          </div>`;
+        return;
+      }
+
+      if (step === 10) {
+        mode = "list";
+         
+         document.getElementById("navBottom").style.display =
+         (mode === "entry") ? "flex" : "none";
+     
+  qa.innerHTML = `
+    <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+      <h2 class="text-xl font-bold mb-3">📋 Übersicht</h2>
+      
+      <h3 class="text-lg font-bold mt-4 mb-2">📍 Standort</h3>
+      <div class="relative mb-2">
+        <input id="addressSearch" class="w-full border p-2 rounded" placeholder="Adresse suchen…" />
+        <div id="addressSuggestions" class="absolute left-0 right-0 bg-white border rounded mt-1 hidden z-50 max-h-48 overflow-y-auto"></div>
+      </div>
+      <button id="gpsBtn" class="px-3 py-2 mb-3 bg-blue-600 text-white rounded">📡 Mein Standort</button>
+
+      <div id="overview-map" class="h-64 rounded border mb-4"></div>
+
+      <div class="flex gap-2">
+        <button id="submitBtn" class="px-4 py-2 bg-green-600 text-white rounded" onclick="submitEntry()">✅ Einreichen</button>
+        <button class="px-4 py-2 bg-gray-200 rounded" onclick="showMyEntries()">✖ Abbrechen</button>
+      </div>
+      <p class="text-xs text-gray-500 mt-3">Deine Eintragung wird geprüft und erst nach Freigabe sichtbar.</p>
+    </div>`;
+
+  // Jetzt nur noch Map initialisieren
+  setTimeout(() => {
+  initOverviewMap();
+
+  // GPS-Button aktivieren
+  const gpsBtn = document.getElementById("gpsBtn");
+  if (gpsBtn) gpsBtn.addEventListener("click", locateGPS);
+
+  // Adress-Suche mit Vorschlägen
+  const addr = document.getElementById("addressSearch");
+  const suggestionBox = document.getElementById("addressSuggestions");
+  if (addr) {
+    addr.addEventListener("input", async e => {
+      const query = e.target.value.trim();
+      if (query.length < 3) {
+        suggestionBox.innerHTML = "";
+        suggestionBox.classList.add("hidden");
+        return;
+      }
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.length) {
+          suggestionBox.innerHTML = "<div class='p-2 text-gray-500'>Keine Treffer</div>";
+          suggestionBox.classList.remove("hidden");
+          return;
+        }
+
+        suggestionBox.innerHTML = data.map(item => `
+          <div class="p-2 hover:bg-gray-100 cursor-pointer" data-lat="${item.lat}" data-lon="${item.lon}">
+            ${item.display_name}
+          </div>`).join("");
+        suggestionBox.classList.remove("hidden");
+
+        suggestionBox.querySelectorAll("div").forEach(div => {
+          div.addEventListener("click", () => {
+            const lat = parseFloat(div.dataset.lat);
+            const lon = parseFloat(div.dataset.lon);
+            addr.value = div.textContent;
+            suggestionBox.classList.add("hidden");
+            initOverviewMap(lat, lon, 15);
+          });
+        });
+      } catch (err) {
+        console.error("Fehler bei Nominatim:", err);
+      }
+    });
+  }
+}, 200);
+  return;
+      }
+      
+    } catch (err) {
+      console.error("renderQuestion error", err);
+      document.getElementById('question-area').innerHTML = `<div class="bg-red-100 p-4 rounded">Fehler: ${err.message}</div>`;
+    }
+  }
+function showTutorial() {
+  const qa = document.getElementById("question-area");
+  mode = "tutorial";
+
+  const tutorialHTML = `
+    <section class="bg-white p-8 rounded-2xl shadow-lg max-w-3xl mx-auto animate-fadeIn">
+      <!-- Header -->
+      <header class="mb-6 text-center">
+        <h2 class="text-3xl font-extrabold text-green-600 mb-2">👋 Willkommen!</h2>
+        <p class="text-gray-600 text-lg">
+          Schön, dass du den <span class="font-semibold text-green-600">Hütten-Assistent</span> benutzt.
+          Hier ein kurzer Überblick über die wichtigsten Funktionen:
+        </p>
+      </header>
+
+      <!-- Übersicht -->
+      <ul class="space-y-5 text-gray-700">
+        <li class="flex items-start">
+          <span class="text-green-500 mr-3 text-xl">➕</span>
+          <p>
+            <strong>„Neue Eintragung“</strong> – Erstelle eine neue Hütten-/Hofladen-Eintragung mit Fotos und Informationen.
+          </p>
+        </li>
+
+        <li class="flex items-start">
+          <span class="text-green-500 mr-3 text-xl">📋</span>
+          <p>
+            <strong>„Meine Eintragungen“</strong> – Übersicht über deine Einträge: Status, Fotos, Standort und Bearbeitungsmöglichkeiten.
+          </p>
+        </li>
+
+        <li class="flex items-start">
+          <span class="text-green-500 mr-3 text-xl">💬</span>
+          <p>
+            <strong>„Hütten-Nachrichten“</strong> – Hier sammeln sich Nachrichten von Besuchern zu deinen Hütten.
+            Neue Nachrichten erscheinen durch das rote Badge in der Seitenleiste. Du kannst Nachrichten öffnen, lesen und (als Hütten-Besitzer) einzelne Nachrichten löschen.
+          </p>
+        </li>
+
+        <li class="flex items-start">
+          <span class="text-green-500 mr-3 text-xl">🆘</span>
+          <p>
+            <strong>„Support“</strong> – Melde Probleme oder stelle Fragen an das Team. Support-Tickets werden gespeichert.
+          </p>
+        </li>
+      </ul>
+
+      <!-- Footer -->
+      <footer class="mt-8 text-center">
+        <p class="text-sm text-gray-500">
+          💡 Tipp: Das System aktualisiert Nachrichten live — das Badge zeigt neue, ungelesene Nachrichten an.
+        </p>
+      </footer>
+    </section>
+  `;
+
+  qa.innerHTML = tutorialHTML;
+  updateInfoBox();
+}
+let hutMessagesUnsub = null;       // Listener für die Liste
+let hutMessagesBadgeUnsub = null;  // Listener für die Sidebar-Badge
+
+// -------------------
+// Seite "Hütten-Nachrichten" öffnen
+// -------------------
+function showHutMessages() {
+  const qa = document.getElementById("question-area");
+  mode = "hutMessages";
+
+  const hutMessagesHTML = `
+    <section class="bg-white p-6 rounded-2xl shadow-lg max-w-3xl mx-auto animate-fadeIn">
+      <header class="mb-4 text-center">
+        <h2 class="text-2xl font-extrabold text-green-600 mb-2">🏡 Hütten-Nachrichten</h2>
+        <p class="text-gray-600 text-sm">Hier findest du Nachrichten, die Besucher zu deinen Hütten geschrieben haben.</p>
+      </header>
+      <div id="hutMessagesList" class="divide-y divide-gray-200 text-sm">
+        <div class="text-gray-400 p-4">⏳ Lade Nachrichten...</div>
+      </div>
+      <footer class="mt-4 text-center">
+        <div id="hutMessagesBadge" class="hidden text-red-600 font-semibold">🔔 Neue Nachrichten!</div>
+      </footer>
+    </section>
+  `;
+
+  qa.innerHTML = hutMessagesHTML;
+  ladeHutMessagesLive();  // Nachrichten live laden
+  updateInfoBox();
+}
+
+// -------------------
+// Sidebar-Badge immer aktuell halten
+// -------------------
+async function initHutMessagesBadge() {
+  if (hutMessagesBadgeUnsub) { hutMessagesBadgeUnsub(); hutMessagesBadgeUnsub = null; }
+
+  const huettenSnap = await db.collection("eierhuetten")
+    .where("userId", "==", currentUser.uid)
+    .get();
+
+  if (huettenSnap.empty) {
+    const counter = document.getElementById("hutMessagesCount");
+    if (counter) counter.classList.add("hidden");
+    return;
+  }
+
+  const hutIds = huettenSnap.docs.map(d => d.id);
+
+  // in Batches von 10 IDs splitten
+  const batches = [];
+  for (let i = 0; i < hutIds.length; i += 10) {
+    const batchIds = hutIds.slice(i, i + 10);
+    batches.push(
+      db.collection("hutMessages")
+        .where("hutId", "in", batchIds)
+    );
+  }
+
+  // mehrere Listener kombinieren
+  const counters = [];
+  hutMessagesBadgeUnsub = () => counters.forEach(unsub => unsub());
+
+  batches.forEach(batchQuery => {
+    const unsub = batchQuery.onSnapshot(snap => {
+      let neuCount = 0;
+      snap.forEach(doc => {
+        if (doc.data().answered === false) neuCount++;
+      });
+
+      const counter = document.getElementById("hutMessagesCount");
+      if (counter) {
+        if (neuCount > 0) {
+          counter.textContent = neuCount;
+          counter.classList.remove("hidden");
+        } else {
+          counter.classList.add("hidden");
+        }
+      }
+    });
+    counters.push(unsub);
+  });
+}
+
+// -------------------
+// Nachrichten-Liste für die Seite
+// -------------------
+async function ladeHutMessagesLive() {
+  const list = document.getElementById("hutMessagesList");
+  const counter = document.getElementById("hutMessagesCount");
+
+  if (!currentUser || !currentUser.uid) {
+    if (list) list.innerHTML = `<div class="p-4 text-gray-500">Bitte anmelden, um Nachrichten zu sehen.</div>`;
+    if (counter) counter.classList.add("hidden");
+    return;
+  }
+
+  if (hutMessagesUnsub) { hutMessagesUnsub(); hutMessagesUnsub = null; }
+
+  const huettenSnap = await db.collection("eierhuetten")
+    .where("userId", "==", currentUser.uid)
+    .get();
+
+  if (huettenSnap.empty) {
+    if (list) list.innerHTML = `<div class="p-4 text-gray-500">Keine eigenen Hütten gefunden.</div>`;
+    if (counter) counter.classList.add("hidden");
+    return;
+  }
+
+  const hutIds = huettenSnap.docs.map(d => d.id);
+
+  // split into batches
+  const batches = [];
+  for (let i = 0; i < hutIds.length; i += 10) {
+    batches.push(
+      db.collection("hutMessages")
+        .where("hutId", "in", hutIds.slice(i, i + 10))
+        .orderBy("createdAt", "desc")
+    );
+  }
+
+  const unsubs = [];
+  hutMessagesUnsub = () => unsubs.forEach(u => u());
+
+  list.innerHTML = "⏳ Lade Nachrichten...";
+
+  // wir sammeln alle Messages aus allen Batches
+  batches.forEach(query => {
+    const unsub = query.onSnapshot(snap => {
+      const allMessages = [];
+
+      // alle Batches abfragen
+      Promise.all(batches.map(b => b.get())).then(results => {
+        results.forEach(batchSnap => {
+          batchSnap.forEach(doc => {
+            allMessages.push({ id: doc.id, ...doc.data() });
+          });
+        });
+
+        // sortieren nach Datum
+        allMessages.sort((a, b) => b.createdAt?.toMillis() - a.createdAt?.toMillis());
+
+        // rendern
+        if (allMessages.length === 0) {
+          list.innerHTML = `<div class="p-4 text-gray-500">Keine Nachrichten vorhanden.</div>`;
+          if (counter) counter.classList.add("hidden");
+          return;
+        }
+
+        let neuCount = 0;
+        list.innerHTML = "";
+        allMessages.forEach(d => {
+          if (d.answered === false) neuCount++;
+          const datum = d.createdAt?.toDate?.().toLocaleString("de-DE") || "-";
+          list.innerHTML += `
+            <div class="p-4 border-b">
+              <div class="text-xs text-gray-500">${datum}</div>
+              <div class="font-semibold">${d.hutName || "-"}</div>
+              <div class="mt-1">${d.message || ""}</div>
+              <div class="text-xs text-gray-400 mt-1">von ${d.senderName || "Gast"}</div>
+                 <!-- 🗑 Löschbutton -->
+      <button 
+        class="text-red-500 text-sm hover:underline"
+        onclick="deleteHutMessage('${d.id}')"
+      >Löschen</button>
+            </div>
+          `;
+        });
+
+        // Badge aktualisieren
+        if (counter) {
+          counter.textContent = `${neuCount}/${allMessages.length}`;
+          counter.classList.remove("hidden");
+        }
+      });
+    });
+
+    unsubs.push(unsub);
+  });
+}
+    async function deleteHutMessage(id) {
+  if (!confirm("Willst du diese Nachricht wirklich löschen?")) return;
+  try {
+    await db.collection("hutMessages").doc(id).delete();
+    console.log("Nachricht gelöscht:", id);
+  } catch (err) {
+    console.error("Fehler beim Löschen:", err);
+    alert("❌ Konnte Nachricht nicht löschen");
+  }
+  }
+  function selectOption(field, value, el) {
+    // deselect siblings
+    if (el && el.parentNode) {
+      el.parentNode.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+    editingData[field] = value;
+  }
+
+  function nextStep() {
+    // validation for some steps
+    if (step === 0) {
+      const ok = document.getElementById('dsCheck') && document.getElementById('dsCheck').checked;
+      if (!ok) { alert('Bitte Datenschutzerklärung akzeptieren'); return; }
+      editingData.datenschutz = true;
+    }
+    // Typ auswählen
+  if (step === 1) {
+    if (!editingData.typ) {
+      alert("Bitte einen Typ auswählen.");
+      return false;
+    }
+  }
+
+  // Öffnungszeiten
+  if (step === 5) {
+    const rawOeff = collectOpeningHours();
+    const normalized = normalizeOpeningHours(rawOeff);
+    if (!normalized || (Array.isArray(normalized) && normalized.length === 0)) {
+      alert("Bitte Öffnungszeiten angeben oder 'Immer geöffnet' auswählen.");
+      return false;
+    }
+    editingData.oeffnungszeiten = normalized;
+  }
+    if (step === 2) {
+      const v = document.getElementById('nameInput')?.value?.trim();
+      if (!v) { alert('Bitte Namen eingeben'); return; }
+      editingData.name = v;
+    }
+    if (step === 6) {
+      editingData.extras = document.getElementById('extrasInput')?.value?.trim();
+    }
+    if (step === 7) {
+      // description already captured via quill on change
+    }
+    if (step === 8) {
+      const raw = document.getElementById('tagsInput')?.value || '';
+      editingData.tags = raw.split(',').map(s=>s.trim()).filter(Boolean).slice(0, 10);
+    }
+
+    if (step < stepsCount - 1) step++;
+    renderQuestion();
+    updateProgress();
+  }
+
+  function prevStep() {
+    if (step > 0) step--;
+    renderQuestion();
+    updateProgress();
+  }
+
+  function startNewEntry() {
+    if (!currentUser || !currentUser.uid) {
+  showToast("Bitte zuerst einloggen");
+  return;
+    }
+    editingData = {};
+    step = 0;
+    mode = "entry";
+    document.getElementById("navBottom").style.display =
+  (mode === "entry") ? "flex" : "none";
+      
+    renderQuestion();
+    toggleSidebar();
+    updateProgress();
+  }
+function collectOpeningHours() {
+  const immer = document.getElementById("immerCheck")?.checked;
+  if (immer) {
+    return "Immer geöffnet";
+  }
+
+  const days = ["Mo","Di","Mi","Do","Fr","Sa","So"];
+  const arr = [];
+  days.forEach(d => {
+    const vonEl = document.getElementById(`open-${d}-von`);
+    const bisEl = document.getElementById(`open-${d}-bis`);
+    const von = vonEl?.value.trim();
+    const bis = bisEl?.value.trim();
+
+    if (von && bis) {
+      arr.push({ tag: d, von, bis });
+    }
+  });
+  return arr;
+}
+    function renderOpeningHours(oeff) {
+  if (!oeff) return "–";
+
+  // Fall 1: String
+  if (typeof oeff === "string") {
+    if (oeff.toLowerCase().includes("immer")) {
+      return "Immer geöffnet ✅";
+    }
+    return oeff; // z.B. "09:00 – 18:00"
+  }
+
+  // Fall 2: Map mit immer:true
+  if (typeof oeff === "object" && !Array.isArray(oeff)) {
+    if (oeff.immer === true) return "Immer geöffnet ✅";
+
+    // Falls in Zukunft auch andere Felder im Objekt gespeichert
+    let keys = Object.keys(oeff);
+    return keys.map(k => `${k}: ${oeff[k]}`).join("<br>");
+  }
+
+  // Fall 3: Array [{tag, von, bis}, …]
+  if (Array.isArray(oeff)) {
+    if (oeff.length === 0) return "–";
+    return oeff.map(o => `${o.tag}: ${o.von} – ${o.bis}`).join("<br>");
+  }
+
+  return "–";
+    }
+  
+  async function submitEntry() {
+  if (!editingData.name || !editingData.typ) {
+    alert('Bitte Typ und Name ausfüllen.');
+    return;
+  }
+
+  // Öffnungszeiten normalisieren bevor sie gespeichert werden
+  const rawOeff = collectOpeningHours();
+  const normalizedOeff = normalizeOpeningHours(rawOeff);
+
+  const payload = {
+    userId: currentUser.uid,
+    name: editingData.name,
+    typ: editingData.typ,
+    sitzplaetze: editingData.sitzplaetze || 'Nein',
+    strom: editingData.strom || 'Nein',
+    extras: editingData.extras || '',
+    tiere: editingData.tiere || [],
+    beschreibung: editingData.beschreibung || '',
+    tags: editingData.tags || [],
+    oeffnungszeiten: normalizedOeff, // ✅ jetzt wird es sauber gespeichert
+    status: 'offen',
+    erstelltAm: firebase.firestore.FieldValue.serverTimestamp(),
+    datenschutzZustimmung: {
+      bestaetigtAm: firebase.firestore.FieldValue.serverTimestamp(),
+      durch: currentUser.email || null
+    }
+  };
+
+  if (editingData.location?.lat && editingData.location?.lng) {
+    payload.location = new firebase.firestore.GeoPoint(
+      editingData.location.lat,
+      editingData.location.lng
+    );
+  }
+
+  try {
+    await db.collection('eierhuetten').add(payload);
+    showToast('✅ Eintragung gesendet. Wird geprüft.');
+    showMyEntries();
+  } catch (err) {
+    console.error('submitEntry error', err);
+    alert('Fehler beim Senden: ' + (err.message || err));
+  }
+               }
+
+let overviewMap;
+let overviewMarker;
+
+function initOverviewMap(lat = 51.1657, lng = 10.4515, zoom = 6) {
+  if (!overviewMap) {
+    overviewMap = L.map("overview-map").setView([lat, lng], zoom);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(overviewMap);
+  } else {
+    overviewMap.setView([lat, lng], zoom);
+  }
+
+  if (!overviewMarker) {
+    overviewMarker = L.marker([lat, lng], { draggable: true }).addTo(overviewMap);
+    overviewMarker.on("dragend", ev => {
+      const p = ev.target.getLatLng();
+      editingData.location = { lat: p.lat, lng: p.lng };
+    });
+  } else {
+    overviewMarker.setLatLng([lat, lng]);
+  }
+
+  editingData.location = { lat, lng };
+}
+
+function locateGPS() {
+  if (!navigator.geolocation) return alert("❌ GPS nicht verfügbar");
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const { latitude, longitude } = pos.coords;
+      initOverviewMap(latitude, longitude, 15);
+    },
+    err => {
+      alert("❌ GPS-Fehler: " + err.message);
+    }
+  );
+}
+
+
+    const stepInfos = {
+  0: {
+    title: "Datenschutz",
+    text: "Bitte lies die Datenschutzerklärung aufmerksam und bestätige sie. Ohne Zustimmung können wir keine Daten annehmen."
+  },
+  1: {
+    title: "Art der Eintragung",
+    text: "Wähle, ob du eine Eierhütte, Hofladen, Selbstbedienungshäuschen, Spielplatz oder Abenteuerhof eintragen möchtest."
+  },
+  2: {
+    title: "Name der Hütte",
+    text: "Verwende einen kurzen, prägnanten Namen, z. B. „Eierhütte am Dorfplatz“."
+  },
+  3: {
+    title: "Sitzplätze",
+    text: "Falls es Sitzgelegenheiten gibt, wähle Ja. Sonst Nein."
+  },
+  4: {
+    title: "Strom",
+    text: "Angabe, ob Strom verfügbar ist. (z.B. zum Aufladen des E-Bikes oder für das Handy)."
+  },
+  5: {
+    title: "Extras",
+    text: "Hier kannst du Besonderheiten angeben, z. B. Getränke, Kühlschrank, Grillmöglichkeiten."
+  },
+  6: {
+    title: "Tiere",
+    text: "Wähle alle Tiere aus, die es vor Ort gibt. Falls keine Tiere da sind, bitte „Keine Tiere“ auswählen."
+  },
+  7: {
+    title: "Beschreibung",
+    text: "Beschreibe deine Hütte, den Hof oder den Ort möglichst ausführlich. Z. B. „Unsere Hütte liegt direkt am Radweg und bietet frische Eier aus Freilandhaltung.“"
+  },
+  8: {
+    title: "Tags",
+    text: "Gib Schlagwörter ein, damit andere die Hütte besser finden können (max. 10). Z. B. „regional, Bio, Frühstück“."
+  },
+  9: {
+    title: "Übersicht & Standort",
+    text: "Hier siehst du alle Angaben zusammen. Wähle den Standort per Klick auf die Karte oder GPS. Du kannst den Marker mit Drag & Drop verschieben."
+  }
+};
+    function updateInfoBox() {
+  const boxDesktop = document.getElementById("infoBox");
+  const boxMobile = document.getElementById("infoBoxMobile");
+
+  let html = "";
+
+  if (mode === "entry") {
+    const info = stepInfos[step];
+    if (info) {
+      html = `
+        <h4 class="font-semibold">${info.title}</h4>
+        <p>${info.text}</p>
+      `;
+    } else {
+      html = "<p>Keine weiteren Informationen verfügbar.</p>";
+    }
+  } else if (mode === "list") {
+    html = `
+      <h4 class="font-semibold">📋 Meine Eintragungen</h4>
+      <p>Hier siehst du deine bereits eingereichten Hütten.<br>
+      Bearbeiten ist nur möglich, sobald die Hütte freigegeben wurde.</p>
+    `;
+  } else if (mode === "tutorial") {
+    html = `
+      <h4 class="font-semibold">👋 Willkommen</h4>
+      <p>Du befindest dich hier im Tutorial, <br>
+      hier wird Dir alles erklärt. </p>
+    `;
+  }  else if (mode === "support") {
+    html = `
+      <h4 class="font-semibold">💬 Support</h4>
+      <p>Stelle hier deine Fragen oder melde Probleme.<br>
+      Deine Tickets werden gespeichert und können später eingesehen oder gelöscht werden.</p>
+    `;
+  } else if (mode === "hutMessages") {
+  html = `
+    <h4 class="font-semibold">🏡 Hütten-Nachrichten</h4>
+    <p>
+      Hier siehst du alle Nachrichten, die Besucher zu deinen Hütten geschickt haben.<br>
+      Diese Übersicht aktualisiert sich automatisch, sobald neue Nachrichten eintreffen.
+    </p>
+    <p class="mt-1 text-sm text-gray-500">
+      Tipp: Neue Nachrichten erkennst du am roten 🔔 Badge in der Seitenleiste.
+    </p>
+  `;
+  } else {
+    html = "<p>ℹ️ Wähle links eine Funktion aus.</p>";
+  }
+
+  // ✨ Desktop-Bereich befüllen
+  if (boxDesktop) boxDesktop.innerHTML = html;
+  // ✨ Mobile Overlay befüllen
+  if (boxMobile) boxMobile.innerHTML = html;
+    }
+  /***********************
+   * Sidebar actions: Meine Eintragungen (mit Bearbeitung)
+   ***********************/
+  async function showMyEntries() {
+    if (!currentUser || !currentUser.uid) {
+  showToast("Bitte zuerst einloggen");
+  return;
+}
+    if (!db) { document.getElementById('question-area').innerHTML = '<div class="bg-red-100 p-4 rounded">Firestore nicht verfügbar.</div>'; return; }
+   mode = "list";
+    updateInfoBox();
+    document.getElementById("navBottom").style.display =
+  (mode === "entry") ? "flex" : "none";
+     
+    const qa = document.getElementById('question-area');
+    qa.innerHTML = '<div class="text-gray-500">⏳ Lade Eintragungen…</div>';
+    try {
+      const snapshot = await db.collection('eierhuetten').where('userId', '==', currentUser.uid).orderBy('erstelltAm','desc').get();
+      const docs = snapshot.docs.filter(doc => {
+        const st = doc.data().status;
+        return st !== 'archiviert' && st !== 'deleted';
+      });
+
+      if (docs.length === 0) {
+        qa.innerHTML = `<div class="bg-white p-6 rounded shadow max-w-2xl mx-auto">Du hast noch keine Hütten.</div>`;
+        toggleSidebar();
+        return;
+      }
+
+      // stats
+      let total = 0, angenommen = 0, offen = 0;
+      docs.forEach(d => { total++; if (d.data().status === 'angenommen') angenommen++; if (d.data().status === 'offen') offen++; });
+
+      qa.innerHTML = '';
+      const statsBar = document.createElement('div');
+      statsBar.className = 'flex justify-around items-center text-sm bg-green-100 text-green-900 py-2 px-4 rounded mb-3 shadow-sm border border-green-300 max-w-2xl mx-auto';
+      statsBar.innerHTML = `<div>🥚 <strong>${total}</strong></div><div>✅ <strong>${angenommen}</strong></div><div>⏳ <strong>${offen}</strong></div>`;
+      qa.appendChild(statsBar);
+
+      // render each hut card with edit controls
+      for (const doc of docs) {
+        const d = doc.data();
+        const id = doc.id;
+        const card = document.createElement('div');
+        card.className = 'bg-white p-4 rounded shadow mb-4 max-w-2xl mx-auto';
+
+        // Normalisieren
+  const normalized = normalizeOpeningHours(d.oeffnungszeiten);
+
+  // Wenn sich was geändert hat → zurückschreiben ins Firestore
+  if (JSON.stringify(d.oeffnungszeiten) !== JSON.stringify(normalized)) {
+    db.collection("eierhuetten").doc(id).update({
+      oeffnungszeiten: normalized
+    }).then(() => {
+      console.log(`oeffnungszeiten normalisiert für Hütte ${id}`);
+    }).catch(console.error);
+  }
+
+  // Danach für die Anzeige verwenden
+  d.oeffnungszeiten = normalized;
+
+        // badge color
+        const statusTxt = d.status === "offen" ? "Wartet auf die Freigabe" : d.status;
+        const badgeColor = d.status === 'accepted' || d.status === 'angenommen' ? 'bg-green-100 text-green-800' : (d.status === 'offen' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-700');
+        card.innerHTML = `
+          <div class="flex justify-between items-start gap-3">
+            <div>
+              <div class="font-bold text-lg">🏡 ${escapeHtml(d.name || 'Unbenannt')}</div>
+              <div class="text-xs text-gray-500 mt-1">${stripHtml(d.beschreibung || '')}</div>
+              <div class="text-xs text-gray-500 mt-1">Extras: ${escapeHtml(d.extras || '-') } • Strom: ${escapeHtml(d.strom || '-') } • Sitzplätze: ${escapeHtml(d.sitzplaetze || '-') }</div>
+              <div class="text-xs text-gray-500 mt-1">Tiere: ${(Array.isArray(d.tiere)?d.tiere.join(', '):'-')}</div>
+            </div>
+            <div>
+              <span class="px-2 py-1 rounded text-xs ${badgeColor}">${escapeHtml(statusTxt || '')}</span>
+            </div>
+          </div>
+
+          <div class="mt-3 text-sm">
+            <!-- editable fields (only active for accepted entries) -->
+            ${d.status === 'angenommen' || d.status === 'accepted' ? `
+              <label class="block mt-2">Name:<br>
+                <input data-id="${id}" class="edit-name w-full border px-2 py-1 rounded" value="${escapeAttr(d.name||'')}" />
+              </label>
+
+              <label class="block mt-2">Sitzplätze:
+                <select data-id="${id}" class="edit-sitz border rounded px-2 py-1">
+                  <option ${d.sitzplaetze==='Ja'?'selected':''}>Ja</option>
+                  <option ${d.sitzplaetze==='Nein'?'selected':''}>Nein</option>
+                </select>
+              </label>
+
+              <label class="block mt-2">Strom:
+                <select data-id="${id}" class="edit-strom border rounded px-2 py-1">
+                  <option ${d.strom==='Ja'?'selected':''}>Ja</option>
+                  <option ${d.strom==='Nein'?'selected':''}>Nein</option>
+                </select>
+              </label>
+
+              <label class="block mt-2">Extras:<br>
+                <input data-id="${id}" class="edit-extras w-full border px-2 py-1 rounded" value="${escapeAttr(d.extras||'')}" />
+              </label>
+
+              <label class="block mt-2">Tiere:<br>
+                <div class="tiere-buttons flex flex-wrap gap-1 mt-1" data-id="${id}">
+                  ${["🐐 Ziege","🐓 Huhn","🐄 Kuh","🐇 Hase","🐕 Hund","🐈 Katze","Keine Tiere"].map(t => {
+                    const isSelected = Array.isArray(d.tiere) && d.tiere.includes(t);
+                    return `<button type="button" class="tiere-btn px-2 py-1 text-xs border rounded ${isSelected?'bg-green-200 border-green-400':'bg-gray-100 border-gray-300'}" data-tiere="${t}">${t}</button>`;
+                  }).join('')}
+                </div>
+                <input type="hidden" data-id="${id}" class="edit-tiere-hidden" value='${Array.isArray(d.tiere)?escapeAttr(d.tiere.join(',')):""}' />
+              </label>
+
+              <label class="block mt-2">Beschreibung:<br>
+                <div id="editor-${id}" class="quill-editor border rounded">${d.beschreibung || ''}</div>
+              </label>
+
+<!-- HIER neue Öffnungszeiten-UI -->
+      <div class="mt-2">
+        <label class="font-semibold block mb-1">🕒 Öffnungszeiten</label>
+        ${renderOpeningHoursEditor(id, d.oeffnungszeiten)}
+      </div>
+
+              <label class="block mt-2">Tags:<br>
+                <input data-id="${id}" class="edit-tags w-full border px-2 py-1 rounded" value="${Array.isArray(d.tags)?escapeAttr(d.tags.join(', ')) : ''}" placeholder="Komma getrennt" />
+              </label>
+
+              <div class="mt-3">
+                <button data-id="${id}" class="save-edit px-3 py-1 bg-green-600 text-white rounded">💾 Speichern</button>
+                <button data-id="${id}" class="delete-hut px-3 py-1 bg-red-600 text-white rounded ml-2">🗑️ Löschen</button>
+              </div>
+            ` : `
+              <div class="text-sm text-gray-500 italic mt-2">⛔ Nach Freigabe bearbeitbar.</div>
+              <div class="mt-2">
+                <button data-id="${id}" class="delete-hut px-3 py-1 bg-red-600 text-white rounded">🗑️ Löschen</button>
+              </div>
+            `}
+          </div>
+
+          <!-- Fotos -->
+          ${Array.isArray(d.fotos) && d.fotos.length ? `
+            <div class="mt-3 grid grid-cols-3 gap-2">
+              ${d.fotos.map((img, idx) => {
+                const obj = (typeof img === 'string') ? { url: img, status: 'freigegeben' } : img;
+                const pending = obj.status === 'wartet';
+return `<div class="relative rounded overflow-hidden border p-1 bg-gray-50">
+  <img src="${escapeAttr(obj.url)}" class="object-cover w-full h-24 rounded ${pending?'opacity-60':''}" />
+  ${pending ? `<span class="absolute bottom-0 left-0 bg-yellow-500 text-white text-xs px-1">Wartet</span>` : ""}
+  <button data-id="${id}" data-url="${escapeAttr(obj.url)}" class="delete-image absolute top-0 right-0 bg-red-600 text-white text-xs rounded-bl px-2">✕</button>
+</div>`;
+              }).join('')}
+            </div>` : ''}
+
+          <!-- upload -->
+          <label class="block mt-3 text-sm">📷 Neues Bild:
+            <input type="file" data-id="${id}" class="upload-image mt-1" accept="image/*">
+          </label>
+          <div id="progress-${id}" class="h-2 bg-gray-200 rounded hidden mt-2"><div class="h-2 bg-green-500 rounded" style="width:0%"></div></div>
+          <div id="progress-label-${id}" class="text-xs text-gray-600 mt-1">0%</div>
+
+          <!-- mini-map -->
+          <div id="minimap-${id}" class="minimap mt-3 rounded border"></div>
+       
+        
+        `;
+        qa.appendChild(card);
+
+        loadMessages(id);
+        // after append: init quill editor, mini-map, attach events
+        setTimeout(() => {
+          // Quill
+          const editorEl = document.getElementById(`editor-${id}`);
+          if (editorEl) {
+            const q = new Quill(`#editor-${id}`, { theme: 'snow' });
+            if (d.beschreibung) q.root.innerHTML = d.beschreibung;
+            // replace the save handler below to read from this quill
+          }
+
+          // map
+          if (d.location && d.location.latitude && d.location.longitude) {
+            try {
+              const m = L.map(`minimap-${id}`, { zoomControl: true }).setView([d.location.latitude, d.location.longitude], 13);
+              L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+              const marker = L.marker([d.location.latitude, d.location.longitude], { draggable: (d.status==='angenommen') }).addTo(m);
+              if (d.status === 'angenommen') {
+                marker.on('dragend', async e => {
+                  const pos = e.target.getLatLng();
+                  await db.collection('eierhuetten').doc(id).update({ location: new firebase.firestore.GeoPoint(pos.lat, pos.lng) });
+                  showToast('📍 Standort aktualisiert');
+                });
+              }
+            } catch (err) { console.warn('map error', err); }
+          }
+
+        }, 300);
+      } // end for
+
+      // attach event delegation: Tiere buttons, save-edit, delete, upload
+      setupMyEntriesDelegation();
+
+      toggleSidebar();
+    } catch (err) {
+      console.error('showMyEntries error', err);
+      document.getElementById('question-area').innerHTML = `<div class="bg-red-100 p-4 rounded">Fehler beim Laden: ${err.message}</div>`;
+    }
+  }
+    
+function renderOpeningHoursEditor(id, oeffnungszeiten) {
+  const immer = oeffnungszeiten === "Immer geöffnet";
+
+  return `
+    <div class="border p-2 rounded bg-gray-50">
+      <label class="flex items-center gap-2 mb-3">
+        <input type="checkbox" class="oeff-immer" data-id="${id}" ${immer ? "checked" : ""}>
+        Immer geöffnet
+      </label>
+      <div class="oeff-days ${immer ? "hidden" : ""}" data-id="${id}">
+        ${["Mo","Di","Mi","Do","Fr","Sa","So"].map(day => {
+          let von = "", bis = "";
+          if (Array.isArray(oeffnungszeiten)) {
+            const found = oeffnungszeiten.find(x => x.tag === day);
+            if (found) { von = found.von; bis = found.bis; }
+          }
+          return `
+            <div class="flex items-center gap-2 mb-1">
+              <span class="w-10">${day}</span>
+              <input type="time" class="border p-1 rounded text-sm oeff-von" data-day="${day}" data-id="${id}" value="${von}">
+              <span>-</span>
+              <input type="time" class="border p-1 rounded text-sm oeff-bis" data-day="${day}" data-id="${id}" value="${bis}">
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
+
+    
+    document.addEventListener("change", e => {
+  if (e.target.classList.contains("oeff-immer")) {
+    const id = e.target.dataset.id;
+    const daysEl = document.querySelector(`.oeff-days[data-id="${id}"]`);
+    if (daysEl) daysEl.classList.toggle("hidden", e.target.checked);
+  }
+});
+    function normalizeOpeningHours(oeff) {
+  if (!oeff) return "Immer geöffnet";
+
+  // Fall 1: String
+  if (typeof oeff === "string") {
+    if (oeff.toLowerCase().includes("immer")) {
+      return "Immer geöffnet";
+    }
+    // String wie "09:00 – 18:00" → als Array für jeden Tag
+    return ["Mo","Di","Mi","Do","Fr","Sa","So"].map(tag => ({
+      tag,
+      von: oeff.split("–")[0].trim(),
+      bis: oeff.split("–")[1].trim()
+    }));
+  }
+
+  // Fall 2: Map {immer:true}
+  if (typeof oeff === "object" && !Array.isArray(oeff)) {
+    if (oeff.immer === true) return "Immer geöffnet";
+    // Falls mal ein Objekt mit Tag->Zeiten drin war
+    return Object.keys(oeff).map(tag => ({
+      tag,
+      von: oeff[tag].split("–")[0].trim(),
+      bis: oeff[tag].split("–")[1].trim()
+    }));
+  }
+
+  // Fall 3: Array [{tag, von, bis}, …] → bereits korrekt
+  if (Array.isArray(oeff)) {
+    return oeff.map(d => ({
+      tag: d.tag,
+      von: d.von,
+      bis: d.bis
+    }));
+  }
+
+  return "Immer geöffnet";
+    }
+    function collectOpeningHoursFromUI(id) {
+  const immerCheck = document.querySelector(`.oeff-immer[data-id="${id}"]`);
+  if (immerCheck?.checked) {
+    return "Immer geöffnet";
+  }
+
+  const result = [];
+  document.querySelectorAll(`.oeff-days[data-id="${id}"] .oeff-von`).forEach(vonEl => {
+    const day = vonEl.dataset.day;
+    const bisEl = document.querySelector(`.oeff-bis[data-day="${day}"][data-id="${id}"]`);
+    const von = vonEl.value.trim();
+    const bis = bisEl?.value.trim();
+    if (von && bis) {
+      result.push({ tag: day, von, bis });
+    }
+  });
+  return result;
+}
+function showPreviewPopup() {
+  const qa = document.getElementById("question-area");
+  const datum = new Date().toLocaleDateString("de-DE");
+
+  qa.innerHTML = `
+    <div class="bg-white p-4 rounded-xl shadow-lg max-w-md mx-auto">
+      <img src="${editingData.imageUrl || '/placeholder.jpg'}" 
+           class="w-full h-40 object-cover rounded mb-3"/>
+
+      <h3 class="text-green-700 font-bold text-lg mb-1">
+        ${editingData.name || 'Unbenannte Hütte'}
+      </h3>
+      <div class="text-sm text-gray-700 mb-2">
+  🕒 Öffnungszeiten:<br>${renderOpeningHours(editingData.oeffnungszeiten)}
+</div>
+      <div class="text-sm">⚡ Strom: ${editingData.strom === "ja" ? "✅" : "❌"}</div>
+      <div class="text-sm">🪑 Sitzplätze: ${editingData.sitzplaetze === "ja" ? "✅" : "❌"}</div>
+      ${editingData.extras ? `<div class="text-sm">📄 Extras: ${editingData.extras}</div>` : ""}
+      ${editingData.tiere?.length ? `<div class="text-sm">🐾 Tiere: ${editingData.tiere.join(" ")} </div>` : ""}
+      ${editingData.beschreibung ? `<div class="text-sm">📝 ${editingData.beschreibung}</div>` : ""}
+      
+      <div class="flex flex-wrap gap-1 mt-2">
+        ${(editingData.tags || []).map(t => `<span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded">#${t}</span>`).join("")}
+      </div>
+
+      <div id="previewMap" class="w-full h-48 mt-4 rounded border"></div>
+
+      <div class="text-xs text-gray-400 mt-2">📅 Eingetragen: ${datum}</div>
+
+      <div class="flex gap-3 mt-4">
+        <button onclick="cancelEntry()" 
+          class="flex-1 bg-gray-300 text-gray-800 px-3 py-2 rounded">❌ Abbrechen</button>
+        <button onclick="submitEntry()" 
+          class="flex-1 bg-green-600 text-white px-3 py-2 rounded">✅ Einreichen</button>
+      </div>
+    </div>
+  `;
+
+  // Kleine Leaflet-Karte erstellen
+  setTimeout(() => {
+    const map = L.map("previewMap", { attributionControl: false, zoomControl: false })
+      .setView([editingData.lat, editingData.lng], 16);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+    }).addTo(map);
+
+    L.marker([editingData.lat, editingData.lng]).addTo(map)
+      .bindPopup(editingData.name || "Neue Hütte")
+      .openPopup();
+  }, 100);
+}
+  /***********************
+   * Delegation & Helpers for Editing UI
+   ***********************/
+  function setupMyEntriesDelegation() {
+  document.querySelectorAll('.tiere-buttons').forEach(container => {
+    container.querySelectorAll('.tiere-btn').forEach(btn => {
+      btn.onclick = () => {
+        let t = btn.getAttribute('data-tiere');
+        t = t.replace(/^[^\s]+\s*/, "").trim(); // Emoji wegschneiden
+
+        const parent = container;
+        const hidden = parent.nextElementSibling; // edit-tiere-hidden
+        let arr = hidden.value ? hidden.value.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const idx = arr.indexOf(t);
+
+        if (t === 'Keine Tiere') {
+          // 👉 alles abwählen, Array leeren
+          arr = [];
+
+          // Buttons zurücksetzen
+          parent.querySelectorAll('.tiere-btn').forEach(b => {
+            b.classList.remove('bg-green-200','border-green-400');
+            b.classList.add('bg-gray-100','border-gray-300');
+          });
+
+          // "Keine Tiere" grün markieren
+          btn.classList.add('bg-green-200','border-green-400');
+          btn.classList.remove('bg-gray-100','border-gray-300');
+
+        } else {
+          // 👉 sicherstellen: "Keine Tiere" raus
+          arr = arr.filter(x => x !== "Keine Tiere");
+
+          if (idx >= 0) {
+            // abwählen
+            arr.splice(idx,1);
+            btn.classList.remove('bg-green-200','border-green-400');
+            btn.classList.add('bg-gray-100','border-gray-300');
+          } else {
+            // auswählen
+            arr.push(t);
+            btn.classList.add('bg-green-200','border-green-400');
+            btn.classList.remove('bg-gray-100','border-gray-300');
+          }
+
+          // "Keine Tiere" Button zurücksetzen
+          const noneBtn = parent.querySelector('.tiere-btn[data-tiere="Keine Tiere"]');
+          if (noneBtn) {
+            noneBtn.classList.remove('bg-green-200','border-green-400');
+            noneBtn.classList.add('bg-gray-100','border-gray-300');
+          }
+        }
+
+        // Hidden-Feld updaten
+        hidden.value = arr.length > 0 ? arr.join(',') : "";
+      };
+    });
+  });
+}
+
+    // save edit buttons
+    document.querySelectorAll('.save-edit').forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute('data-id');
+        await saveEditFromUI(id);
+      };
+    });
+
+    // delete hut
+    document.querySelectorAll('.delete-hut').forEach(btn => {
+      btn.onclick = async () => {
+        const id = btn.getAttribute('data-id');
+        if (!confirm('Hütte wirklich löschen?')) return;
+        try { await db.collection('eierhuetten').doc(id).update({ status: 'archiviert' }); showToast('Hütte archiviert'); showMyEntries(); }
+        catch (e) { console.error(e); alert('Fehler: '+e.message); }
+      };
+    });
+
+    // image upload inputs
+    document.querySelectorAll('.upload-image').forEach(input => {
+      input.onchange = async (ev) => {
+        const id = input.getAttribute('data-id');
+        await uploadImagesForHut(input.files, id);
+      };
+    });
+
+    // delete image buttons
+    document.querySelectorAll('.delete-image').forEach(btn => {
+      btn.onclick = async (ev) => {
+        const id = btn.getAttribute('data-id');
+        const url = btn.getAttribute('data-url');
+        if (!confirm('Dieses Bild löschen?')) return;
+        try {
+          // remove from array
+          const docRef = db.collection('eierhuetten').doc(id);
+          const snap = await docRef.get();
+          const fotos = Array.isArray(snap.data().fotos) ? [...snap.data().fotos] : [];
+          const newFotos = fotos.filter(f => (typeof f === 'string' ? f : f.url) !== url);
+          await docRef.update({ fotos: newFotos });
+          showToast('Bild entfernt');
+          showMyEntries();
+        } catch (e) { console.error(e); alert('Fehler: '+e.message); }
+      };
+    });
+  }
+function loadMessages(hutId) {
+  const wrap = document.getElementById("msgs-" + hutId);
+  if (!wrap) return;
+
+  // Live-Listener
+  db.collection("eierhuetten").doc(hutId)
+    .collection("messages").orderBy("createdAt", "desc")
+    .onSnapshot(snap => {
+      wrap.innerHTML = "";
+      snap.forEach(doc => {
+        const d = doc.data();
+        wrap.innerHTML += `<div class="bg-gray-100 rounded px-2 py-1">
+          <div>${escapeHtml(d.text)}</div>
+          <div class="text-xs text-gray-500">
+            ${d.sender || "-"} · ${d.createdAt?.toDate?.().toLocaleString?.() || ""}
+          </div>
+        </div>`;
+      });
+    });
+}
+
+async function sendMsg(hutId) {
+  const inp = document.getElementById("msgInput-"+hutId);
+  const text = inp.value.trim();
+  if (!text) return;
+  await db.collection("eierhuetten").doc(hutId).collection("messages").add({
+    text,
+    sender: currentUser.email,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  inp.value = "";
+  loadMessages(hutId);
+}
+  let pendingEdit = null; // Zwischenspeicher für aktuelle Änderungen
+
+async function saveEditFromUI(id) {
+  try {
+    const nameEl = document.querySelector(`.edit-name[data-id="${id}"]`);
+    const sitzEl = document.querySelector(`.edit-sitz[data-id="${id}"]`);
+    const stromEl = document.querySelector(`.edit-strom[data-id="${id}"]`);
+    const extrasEl = document.querySelector(`.edit-extras[data-id="${id}"]`);
+    const tiereHidden = document.querySelector(`.edit-tiere-hidden[data-id="${id}"]`);
+
+    const tagsEl = document.querySelector(`.edit-tags[data-id="${id}"]`);
+    const editorEl = document.getElementById(`editor-${id}`);
+// Öffnungszeiten hinzufügen
+    const oeffnungszeiten = collectOpeningHoursFromUI(id);
+        // neue Werte sammeln
+    const payload = {};
+    if (nameEl) payload.name = nameEl.value.trim();
+    if (sitzEl) payload.sitzplaetze = sitzEl.value;
+    if (stromEl) payload.strom = stromEl.value;
+    if (extrasEl) payload.extras = extrasEl.value.trim();
+    if (tagsEl) payload.tags = tagsEl.value ? tagsEl.value.split(',').map(s=>s.trim()).filter(Boolean).slice(0,10) : [];
+    if (tiereHidden) {
+  payload.tiere = tiereHidden.value
+    ? tiereHidden.value.split(",").map(s => s.trim()).filter(Boolean)
+    : [];
+    }
+    if (oeffnungszeiten) payload.oeffnungszeiten = oeffnungszeiten;
+
+    if (editorEl) {
+      try {
+        const q = Quill.find(editorEl);
+        if (q) payload.beschreibung = q.root.innerHTML;
+      } catch (e) { console.warn('quill not found', e); }
+    }
+
+    // alte Daten holen
+    const docSnap = await db.collection('eierhuetten').doc(id).get();
+    const alteDaten = docSnap.exists ? docSnap.data() : {};
+
+    // Änderungen als Liste zusammenstellen
+    let html = "";
+    Object.keys(payload).forEach(key => {
+      const alt = Array.isArray(alteDaten[key]) ? alteDaten[key].join(", ") : (alteDaten[key] || "");
+      const neu = Array.isArray(payload[key]) ? payload[key].join(", ") : (payload[key] || "");
+      if (alt !== neu) {
+        html += `<div class="mb-2">
+          <span class="font-semibold">${key}:</span><br>
+          <span class="text-gray-500 text-xs">alt:</span> ${escapeHtml(alt)}<br>
+          <span class="text-gray-500 text-xs">neu:</span> ${escapeHtml(neu)}
+        </div>`;
+      }
+    });
+    if (!html) {
+      showToast("ℹ️ Keine Änderungen erkannt");
+      return;
+    }
+
+    // Änderungen & IDs merken
+    pendingEdit = { id, payload, alteDaten };
+
+    // ins Modal einsetzen
+    document.getElementById("editChangesList").innerHTML = html;
+
+    // Modal anzeigen
+    document.getElementById("editConfirmModal").classList.remove("hidden");
+    document.getElementById("editConfirmModal").classList.add("flex");
+
+  } catch (e) {
+    console.error('saveEditFromUI error', e);
+    alert('Fehler beim Sammeln der Änderungen: ' + (e.message || e));
+  }
+}
+
+function cancelEdit() {
+  if (!pendingEdit) return;
+  const { id, alteDaten } = pendingEdit;
+
+  // Eingabefelder zurücksetzen
+  const nameEl = document.querySelector(`.edit-name[data-id="${id}"]`);
+  const sitzEl = document.querySelector(`.edit-sitz[data-id="${id}"]`);
+  const stromEl = document.querySelector(`.edit-strom[data-id="${id}"]`);
+  const extrasEl = document.querySelector(`.edit-extras[data-id="${id}"]`);
+  const tiereHidden = document.querySelector(`.edit-tiere-hidden[data-id="${id}"]`);
+  const tagsEl = document.querySelector(`.edit-tags[data-id="${id}"]`);
+  const editorEl = document.getElementById(`editor-${id}`);
+
+  if (nameEl) nameEl.value = alteDaten.name || "";
+  if (sitzEl) sitzEl.value = alteDaten.sitzplaetze || "";
+  if (stromEl) stromEl.value = alteDaten.strom || "";
+  if (extrasEl) extrasEl.value = alteDaten.extras || "";
+  if (tagsEl) tagsEl.value = (alteDaten.tags || []).join(", ");
+  if (tiereHidden) tiereHidden.value = (alteDaten.tiere || []).join(", ");
+  if (editorEl) {
+    try {
+      const q = Quill.find(editorEl);
+      if (q) q.root.innerHTML = alteDaten.beschreibung || "";
+    } catch (e) {}
+  }
+
+  // Modal schließen
+  document.getElementById("editConfirmModal").classList.add("hidden");
+  document.getElementById("editConfirmModal").classList.remove("flex");
+
+  pendingEdit = null;
+  showToast("❌ Änderungen verworfen und UI zurückgesetzt");
+}
+async function confirmEdit() {
+  if (!pendingEdit) return;
+  const { id, payload } = pendingEdit;
+  try {
+    await db.collection('eierhuetten').doc(id).update(payload);
+    await db.collection('eierhuetten').doc(id).collection('log').add({
+      admin: currentUser.email || currentUser.displayName || 'web',
+      feld: 'edit',
+      wert: JSON.stringify(payload),
+      zeitpunkt: new Date()
+    });
+    showToast('✅ Änderungen gespeichert');
+    await showMyEntries();
+  } catch (e) {
+    console.error("confirmEdit error", e);
+    alert("Fehler beim Speichern: " + (e.message || e));
+  }
+  // Modal schließen
+  document.getElementById("editConfirmModal").classList.add("hidden");
+  document.getElementById("editConfirmModal").classList.remove("flex");
+  pendingEdit = null;
+      }
+   
+function setActive(buttonId) {
+    const buttons = document.querySelectorAll('.sidebar-btn');
+    buttons.forEach(btn => btn.classList.remove('bg-green-100', 'font-semibold'));
+    const activeBtn = document.getElementById(buttonId);
+    if(activeBtn) {
+      activeBtn.classList.add('bg-green-100', 'font-semibold');
+    }
+  }
+
+  /**
+   * Setzt Google Profil oder generiertes Avatar mit Initialen und Farbverlauf.
+   * @param {Object} user - { email: string, picture: string|null }
+   */
+  function setGoogleProfile(user) {
+    const email = user.email || '-';
+    const picture = user.picture;
+
+    const profilePic = document.getElementById('profilePic');
+    const avatarWrapper = document.getElementById('avatarWrapper');
+    const avatarInitials = document.getElementById('avatarInitials');
+
+    if(picture) {
+      profilePic.src = picture;
+      profilePic.classList.remove('hidden');
+      avatarInitials.textContent = '';
+      avatarWrapper.style.background = ''; // Bild überlagert Farbverlauf
+    } else {
+      profilePic.classList.add('hidden');
+      const initial = email.charAt(0).toUpperCase() || 'U';
+      avatarInitials.textContent = initial;
+
+      // Farbverlauf basierend auf E-Mail hash
+      const hash = Array.from(email).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+      const colors = [
+        ['#34D399','#10B981'], // grün
+        ['#60A5FA','#3B82F6'], // blau
+        ['#FBBF24','#F59E0B'], // gelb
+        ['#F87171','#EF4444'], // rot
+        ['#A78BFA','#8B5CF6'], // lila
+        ['#F472B6','#EC4899']  // pink
+      ];
+      const chosen = colors[hash % colors.length];
+      avatarWrapper.style.background = `linear-gradient(135deg, ${chosen[0]}, ${chosen[1]})`;
+    }
+
+    document.getElementById('accountMail').textContent = email;
+  }
+
+  // Beispiel-Aufruf:
+  // setGoogleProfile({ email: "max@gmail.com", picture: null });
+  /***********************
+   * Image upload (immediate upload to imgbb + push to Firestore)
+   ***********************/
+  async function uploadImagesForHut(fileList, hutId) {
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList);
+    const progressBar = document.getElementById(`progress-${hutId}`);
+    const progressLabel = document.getElementById(`progress-label-${hutId}`);
+    progressBar.classList.remove('hidden');
+    let uploaded = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      progressLabel.textContent = `Lade ${i+1}/${files.length} ...`;
+      try {
+        const base64 = await fileToBase64(file);
+        const fd = new FormData();
+        fd.append('key', IMGBB_KEY);
+        fd.append('image', base64);
+        const res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: fd });
+        const json = await res.json();
+        if (json && json.data && json.data.url) {
+          uploaded.push({ url: json.data.url, delete_url: json.data.delete_url || null, status: 'wartet' });
+        } else {
+          console.warn('imgbb response invalid', json);
+        }
+        const pct = Math.round(((i+1)/files.length)*100);
+        progressBar.querySelector('div').style.width = pct + '%';
+      } catch (e) {
+        console.error('upload error', e);
+        showToast('Fehler beim Hochladen', 4000);
+      }
+    }
+
+    // write to firestore
+    if (uploaded.length > 0) {
+      try {
+        const ref = db.collection('eierhuetten').doc(hutId);
+        await ref.update({ fotos: firebase.firestore.FieldValue.arrayUnion(...uploaded) });
+        showToast('Bilder hochgeladen (warten auf Freigabe)');
+      } catch (e) {
+        console.error('write fotos error', e);
+        alert('Fehler beim Speichern der Bild-Daten: ' + e.message);
+      }
+    }
+    progressLabel.textContent = 'Fertig';
+    setTimeout(()=>{ progressBar.classList.add('hidden'); progressLabel.textContent = '0%'; }, 1200);
+    // refresh
+    showMyEntries();
+  }
+
+  function fileToBase64(file) {
+    return new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result;
+        const base64 = dataUrl.split(',')[1];
+        res(base64);
+      };
+      reader.onerror = err => rej(err);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /***********************
+   * Support form
+   ***********************/
+
+    // ------- Support: Formular + Laden der Tickets -------
+function openSupport() {
+  if (!currentUser || !currentUser.uid) {
+    showToast("Bitte zuerst einloggen");
+    return;
+  }
+
+  mode = "support";
+  document.getElementById("navBottom").style.display = (mode === "entry") ? "flex" : "none";
+
+  const qa = document.getElementById('question-area');
+  qa.innerHTML = `
+    <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+      <h2 class="text-xl font-bold mb-3">📨 Support</h2>
+
+      <label class="block mb-2">
+        <div class="text-sm text-gray-600">Name</div>
+        <input id="supName" class="w-full border p-2 rounded" placeholder="Dein Name" value="${escapeAttr(currentUser.displayName || '')}" />
+      </label>
+
+      <label class="block mb-2">
+        <div class="text-sm text-gray-600">E-Mail</div>
+        <input id="supMail" class="w-full border p-2 rounded" placeholder="E-Mail" value="${escapeAttr(currentUser.email || '')}" />
+      </label>
+
+      <label class="block mb-4">
+        <div class="text-sm text-gray-600">Nachricht</div>
+        <textarea id="supMsg" class="w-full border p-2 rounded" rows="4" placeholder="Nachricht..."></textarea>
+      </label>
+
+      <div class="flex gap-2 mb-4">
+        <button class="px-4 py-2 bg-green-600 text-white rounded" onclick="sendSupport()">Absenden</button>
+        <button class="px-4 py-2 bg-gray-200 rounded" onclick="startNewEntry()">Abbrechen</button>
+      </div>
+
+      <hr class="my-4" />
+
+      <h3 class="text-lg font-bold mb-2">📂 Deine bisherigen Support-Tickets</h3>
+      <div id="supportList" class="space-y-2 text-sm text-gray-700">⏳ Lade Support-Tickets…</div>
+    </div>
+  `;
+
+  updateInfoBox();
+  loadSupportTickets(); // befüllt #supportList
+  toggleSidebar();
+}
+
+
+
+  
+/**
+ * Optional: showSupportTickets() belassen oder neu anpassen, damit
+ * sie die Liste (ohne Formular) zeigt. Beispiel:
+ */
+async function showSupportTickets() {
+  if (!currentUser || !currentUser.uid) { showToast("Bitte zuerst einloggen"); return; }
+  mode = "list";
+  document.getElementById("navBottom").style.display = (mode === "entry") ? "flex" : "none";
+  const qa = document.getElementById("question-area");
+  qa.innerHTML = `
+    <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+      <h2 class="text-xl font-bold mb-3">📂 Meine Support-Tickets</h2>
+      <div id="supportList" class="space-y-2 text-sm text-gray-700">⏳ Lade Support-Tickets…</div>
+    </div>
+  `;
+  updateInfoBox();
+  loadSupportTickets();
+  toggleSidebar();
+}
+/* -------------------------
+   Robuste Support-Implementierung
+   - zeigt support id an
+   - individuelle message-listener pro ticket (mit unsubscribe map)
+   - fallback: erste Nachricht aus ticket doc (wenn messages empty)
+   - Zeichenbegrenzung + Counter pro Eingabefeld
+   - sichere DOM-Erstellung (keine großen innerHTML-Klumpen)
+   ------------------------- */
+
+const SUPPORT_MSG_MAX = 250;
+// Map ticketId -> unsubscribe function for messages onSnapshot
+const _supportUnsubs = new Map();
+
+async function loadSupportTickets() {
+  const list = document.getElementById("supportList");
+  if (!list) return;
+  if (!currentUser || !currentUser.email) {
+    list.innerHTML = "<div class='text-gray-500'>Bitte anmelden, um deine Tickets zu sehen.</div>";
+    return;
+  }
+
+  // unsubscribe all previous listeners to avoid duplicates
+  _supportUnsubs.forEach(u => { try { u(); } catch(e){} });
+  _supportUnsubs.clear();
+
+  list.innerHTML = "⏳ Lade Support-Tickets…";
+
+  try {
+    let query = db.collection("support").where("mail", "==", currentUser.email);
+    let snap;
+    try {
+      snap = await query.orderBy("createdAt", "desc").get();
+    } catch (errOrder) {
+      console.warn("OrderBy failed (maybe index required) - fallback without orderBy:", errOrder);
+      snap = await query.get();
+    }
+
+    if (!snap || snap.empty) {
+      list.innerHTML = "<div class='text-gray-500'>Keine Support-Anfragen gefunden.</div>";
+      return;
+    }
+
+    // build DOM with document fragment for performance
+    const frag = document.createDocumentFragment();
+    snap.forEach(doc => {
+      const d = doc.data();
+      const id = doc.id;
+
+      // outer card
+      const card = document.createElement("div");
+      card.className = "bg-gray-100 p-3 rounded mb-3";
+
+      // header row: title + support id
+      const hdr = document.createElement("div");
+      hdr.className = "flex justify-between items-start gap-2";
+      const title = document.createElement("div");
+      title.className = "font-semibold";
+      title.textContent = "📨 Support Ticket";
+      const idEl = document.createElement("div");
+      idEl.className = "text-xs text-gray-500";
+      idEl.innerHTML = `<span class="font-mono">ID: ${escapeHtml(id)}</span>`; // safe: id is escaped
+      hdr.appendChild(title);
+      hdr.appendChild(idEl);
+      card.appendChild(hdr);
+
+      // meta: created + status
+      const created = document.createElement("div");
+      created.className = "text-xs text-gray-500 mt-1";
+      let createdStr = "-";
+      try {
+        if (d.createdAt && typeof d.createdAt.toDate === "function") createdStr = d.createdAt.toDate().toLocaleString();
+        else if (d.createdAt) createdStr = new Date(d.createdAt).toLocaleString();
+      } catch(e){}
+      created.innerHTML = `Gesendet: ${escapeHtml(createdStr)}<br>Status: ${escapeHtml(d.status || "offen")}`;
+      card.appendChild(created);
+
+      // messages container
+      const msgsWrap = document.createElement("div");
+      msgsWrap.id = `msgs-${id}`;
+      msgsWrap.className = "space-y-2 my-2 text-sm";
+      msgsWrap.textContent = "⏳ Lade Nachrichten…";
+      card.appendChild(msgsWrap);
+
+      // controls container
+      const controls = document.createElement("div");
+      controls.className = "mt-2";
+
+      if (d.status !== "geschlossen") {
+        // input
+        const input = document.createElement("input");
+        input.type = "text";
+        input.id = `msgInput-${id}`;
+        input.maxLength = SUPPORT_MSG_MAX;
+        input.placeholder = `Antwort schreiben (max ${SUPPORT_MSG_MAX} Zeichen)...`;
+        input.className = "w-full border p-2 rounded text-sm mb-1";
+
+        // counter
+        const counter = document.createElement("div");
+        counter.id = `msgCounter-${id}`;
+        counter.className = "text-xs text-gray-500 mb-2";
+        counter.textContent = `${SUPPORT_MSG_MAX} Zeichen übrig`;
+
+        // buttons row
+        const btnRow = document.createElement("div");
+        btnRow.className = "flex gap-2";
+
+        const sendBtn = document.createElement("button");
+        sendBtn.className = "px-3 py-2 bg-green-600 text-white rounded text-sm flex-1";
+        sendBtn.textContent = "Senden";
+
+        const closeBtn = document.createElement("button");
+        closeBtn.className = "px-3 py-2 bg-gray-600 text-white rounded text-sm";
+        closeBtn.textContent = "✅ Ticket schließen";
+
+        btnRow.appendChild(sendBtn);
+        btnRow.appendChild(closeBtn);
+
+        controls.appendChild(input);
+        controls.appendChild(counter);
+        controls.appendChild(btnRow);
+
+        // attach event listeners (closure captures id)
+        input.addEventListener("input", () => {
+          const left = SUPPORT_MSG_MAX - input.value.length;
+          counter.textContent = `${left} Zeichen übrig`;
+        });
+        sendBtn.addEventListener("click", () => replySupport(id));
+        closeBtn.addEventListener("click", () => closeSupportTicket(id));
+
+      } else {
+        // closed ticket -> show notice and allow delete only
+        const closedNotice = document.createElement("div");
+        closedNotice.className = "text-sm text-red-600";
+        closedNotice.textContent = "Ticket ist geschlossen";
+        controls.appendChild(closedNotice);
+      }
+
+      // small action row: show path + delete button
+      const actionRow = document.createElement("div");
+      actionRow.className = "mt-2 flex items-center justify-between gap-2";
+      const pathInfo = document.createElement("div");
+      pathInfo.className = "text-xs text-gray-400";
+      pathInfo.innerHTML = `Gespeichert in: <code>support/${escapeHtml(id)}</code>`;
+      const delBtn = document.createElement("button");
+      delBtn.className = "px-2 py-1 text-xs bg-red-600 text-white rounded";
+      delBtn.textContent = "🗑️ Löschen";
+      delBtn.addEventListener("click", () => deleteSupport(id));
+      actionRow.appendChild(pathInfo);
+      actionRow.appendChild(delBtn);
+
+      card.appendChild(controls);
+      card.appendChild(actionRow);
+
+      frag.appendChild(card);
+
+      // start messages listener for this ticket (store unsubscribe)
+      const ticketDocMsg = d.msg ?? null; // first msg stored in doc field (legacy)
+      const ticketDocMail = d.mail ?? null;
+      const ticketDocCreatedAt = d.createdAt ?? null;
+
+      // create onSnapshot listener and store unsubscribe
+      const unsub = db.collection("support").doc(id).collection("messages")
+        .orderBy("createdAt", "asc")
+        .onSnapshot((msnap) => {
+          // render messages for this ticket
+          const wrap = document.getElementById(`msgs-${id}`);
+          if (!wrap) return;
+          // build html
+          let html = "";
+          if (!msnap.empty) {
+            msnap.forEach(mdoc => {
+              const md = mdoc.data();
+              let time = "-";
+              try { if (md.createdAt && md.createdAt.toDate) time = md.createdAt.toDate().toLocaleString(); } catch(e){}
+              html += `
+                <div class="bg-white border rounded p-2">
+                  <div class="text-sm">${escapeHtml(md.text)}</div>
+                  <div class="text-xs text-gray-500">${escapeHtml(md.sender || "-")} · ${escapeHtml(time)}</div>
+                </div>`;
+            });
+          } else if (ticketDocMsg) {
+            // fallback: show doc.msg if no subcollection messages
+            let t = "-";
+            try { if (ticketDocCreatedAt && ticketDocCreatedAt.toDate) t = ticketDocCreatedAt.toDate().toLocaleString(); } catch(e){}
+            html += `
+              <div class="bg-white border rounded p-2">
+                <div class="text-sm">${escapeHtml(ticketDocMsg)}</div>
+                <div class="text-xs text-gray-500">${escapeHtml(ticketDocMail || "-")} · ${escapeHtml(t)}</div>
+              </div>`;
+          } else {
+            html = "<div class='text-gray-500'>Keine Nachrichten</div>";
+          }
+          wrap.innerHTML = html;
+        }, err => {
+          console.error("messages onSnapshot error for", id, err);
+          const wrap = document.getElementById(`msgs-${id}`);
+          if (wrap) wrap.innerHTML = `<div class="text-red-600">Fehler beim Laden der Nachrichten: ${escapeHtml(err.message || String(err))}</div>`;
+        });
+
+      // store unsubscribe
+      _supportUnsubs.set(id, unsub);
+    });
+
+    // replace list content
+    list.innerHTML = "";
+    list.appendChild(frag);
+
+  } catch (err) {
+    console.error("loadSupportTickets error:", err);
+    list.innerHTML = `<div class="text-red-600">❌ Fehler beim Laden: ${escapeHtml(err.message || String(err))}</div>`;
+  }
+}
+
+// Antwort schreiben (replies gehen in support/{id}/messages)
+async function replySupport(ticketId) {
+  // read input for this ticket
+  const inp = document.getElementById(`msgInput-${ticketId}`);
+  if (!inp) return;
+  const text = inp.value.trim();
+  if (!text) return;
+
+  // check ticket status before sending (optional read)
+  try {
+    const doc = await db.collection("support").doc(ticketId).get();
+    const data = doc.exists ? doc.data() : null;
+    if (data && data.status === "geschlossen") {
+      alert("Dieses Ticket ist geschlossen. Keine Antworten möglich.");
+      return;
+    }
+  } catch (err) {
+    console.warn("Could not read ticket status:", err);
+  }
+
+  try {
+    await db.collection("support").doc(ticketId).collection("messages").add({
+      text,
+      sender: currentUser.email || currentUser.uid || "web",
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    inp.value = "";
+    const counter = document.getElementById(`msgCounter-${ticketId}`);
+    if (counter) counter.textContent = `${SUPPORT_MSG_MAX} Zeichen übrig`;
+  } catch (err) {
+    console.error("replySupport error:", err);
+    alert("Fehler beim Senden: " + (err.message || String(err)));
+  }
+}
+
+// Ticket erstellen + erste Nachricht in subcollection schreiben
+async function sendSupport() {
+  const name = document.getElementById('supName')?.value.trim() || '';
+  const mail = document.getElementById('supMail')?.value.trim() || (currentUser?.email || '');
+  const msg = document.getElementById('supMsg')?.value.trim() || '';
+  if (!msg || !mail) { alert('Bitte Nachricht und E-Mail ausfüllen'); return; }
+
+  try {
+    // create ticket doc first (without msg field or keep legacy)
+    const ticketRef = await db.collection('support').add({
+      name,
+      mail,
+      status: 'offen',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    // add first message in subcollection
+    await ticketRef.collection('messages').add({
+      text: msg,
+      sender: mail,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    showToast('✅ Ticket erstellt');
+    // clear form
+    if (document.getElementById('supMsg')) document.getElementById('supMsg').value = '';
+    // reload tickets
+    await loadSupportTickets();
+  } catch (err) {
+    console.error("sendSupport error:", err);
+    alert("Fehler: " + (err.message || String(err)));
+  }
+}
+
+// Ticket schließen
+async function closeSupportTicket(ticketId) {
+  if (!confirm("Ticket wirklich schließen?")) return;
+  try {
+    await db.collection('support').doc(ticketId).update({ status: "geschlossen" });
+    showToast("Ticket geschlossen");
+    // reload tickets (will unsubscribe and re-subscribe)
+    await loadSupportTickets();
+  } catch (err) {
+    console.error("closeSupportTicket error:", err);
+    alert("Fehler beim Schließen: " + (err.message || String(err)));
+  }
+}
+
+// Ticket löschen
+async function deleteSupport(ticketId) {
+  if (!confirm("Ticket wirklich löschen?")) return;
+  try {
+    // unsubscribe listener if present
+    const unsub = _supportUnsubs.get(ticketId);
+    if (unsub) { try { unsub(); } catch(e){}; _supportUnsubs.delete(ticketId); }
+
+    await db.collection('support').doc(ticketId).delete();
+    showToast("Support-Ticket gelöscht");
+    // reload list
+    await loadSupportTickets();
+  } catch (err) {
+    console.error("deleteSupport error:", err);
+    alert("Fehler beim Löschen: " + (err.message || String(err)));
+  }
+}
+  /***********************
+   * Utility, escape helpers
+   ***********************/
+  function escapeHtml(s) {
+    if (!s && s !== 0) return '';
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  function escapeAttr(s) {
+    if (!s && s !== 0) return '';
+    return String(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+function stripHtml(html) {
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || "";
+}
+  /***********************
+   * Sidebar toggle + init
+   ***********************/
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('-translate-x-full');
+  }
+async function showSupportTickets() {
+  if (!currentUser || !currentUser.uid) {
+  showToast("Bitte zuerst einloggen");
+  return;
+}
+  mode = "support";
+  document.getElementById("navBottom").style.display =
+  (mode === "entry") ? "flex" : "none";
+    
+  const qa = document.getElementById("question-area");
+  qa.innerHTML = "⏳ Lade Support-Tickets…";
+  const snap = await db.collection("support").where("mail","==",currentUser.email).orderBy("createdAt","desc").get();
+  if (snap.empty) { qa.innerHTML = "<p>Keine Support-Anfragen gefunden.</p>"; return; }
+  qa.innerHTML = "";
+  snap.forEach(doc=>{
+    const d = doc.data();
+    qa.innerHTML += `
+      <div class="bg-white p-4 rounded shadow mb-2">
+        <div class="font-bold">📨 ${d.msg}</div>
+        <div class="text-xs text-gray-500">Gesendet: ${d.createdAt?.toDate?.().toLocaleString?.() || '-'}</div>
+        <div class="text-xs">Status: ${d.status || "offen"}</div>
+        <button class="delete-support px-2 py-1 text-xs bg-red-600 text-white rounded mt-1" onclick="deleteSupport('${doc.id}')">Löschen</button>
+      </div>`;
+  });
+  toggleSidebar();
+  updateInfoBox();
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("toggleInfo");
+  const overlay = document.getElementById("infoOverlay");
+  const close = document.getElementById("closeInfo");
+
+  if (btn && overlay && close) {
+    btn.addEventListener("click", () => overlay.classList.remove("hidden"));
+    close.addEventListener("click", () => overlay.classList.add("hidden"));
+  }
+});
+
+    
+
+async function deleteSupport(id) {
+  if (!confirm("Ticket wirklich löschen?")) return;
+  await db.collection("support").doc(id).delete();
+  showToast("Support-Ticket gelöscht");
+  showSupportTickets();
+}
+  // initial render
+  renderQuestion();
+  updateProgress();
+
+  // Expose helpful functions to window for inline handlers
+  window.selectOption = selectOption;
+  window.nextStep = nextStep;
+  window.prevStep = prevStep;
+  window.startNewEntry = startNewEntry;
+  window.showMyEntries = showMyEntries;
+  window.openSupport = openSupport;
+  window.toggleSidebar = toggleSidebar;
+  window.submitEntry = submitEntry;
+
+  </script>
+
+  <!-- Modal zur Bestätigung von Änderungen -->
+<div id="editConfirmModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-xl shadow p-6 max-w-lg w-full">
+    <h3 class="text-lg font-bold mb-3">Änderungen bestätigen</h3>
+    <div id="editChangesList" class="text-sm bg-gray-50 border p-3 rounded mb-4 max-h-60 overflow-y-auto">
+      <!-- Änderungen werden hier dynamisch eingefügt -->
+    </div>
+    <div class="flex justify-end gap-2">
+      <button onclick="cancelEdit()" class="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400">
+        ❌ Abbrechen
+      </button>
+      <button onclick="confirmEdit()" class="px-4 py-2 rounded bg-green-600 text-white hover:bg-green-700">
+        ✅ Speichern
+      </button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
